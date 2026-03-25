@@ -1,0 +1,6 @@
+.lake/
+.pytest_cache/
+.venv/
+__pycache__/
+todo.txt
+notes.txt

@@ -1,0 +1,132 @@
+{
+  "exact_certificate_blocks": [
+    {
+      "multiplier": {
+        "expr": "1",
+        "gens": [
+          "x"
+        ]
+      },
+      "multiplier_factor_indices": [],
+      "multiplier_factors": [],
+      "sos_poly": {
+        "expr": "0",
+        "gens": [
+          "x"
+        ]
+      },
+      "weighted_sos": []
+    },
+    {
+      "multiplier": {
+        "expr": "x",
+        "gens": [
+          "x"
+        ]
+      },
+      "multiplier_factor_indices": [
+        0
+      ],
+      "multiplier_factors": [
+        {
+          "expr": "x",
+          "gens": [
+            "x"
+          ]
+        }
+      ],
+      "sos_poly": {
+        "expr": "0",
+        "gens": [
+          "x"
+        ]
+      },
+      "weighted_sos": []
+    },
+    {
+      "multiplier": {
+        "expr": "1 - x",
+        "gens": [
+          "x"
+        ]
+      },
+      "multiplier_factor_indices": [
+        1
+      ],
+      "multiplier_factors": [
+        {
+          "expr": "1 - x",
+          "gens": [
+            "x"
+          ]
+        }
+      ],
+      "sos_poly": {
+        "expr": "0",
+        "gens": [
+          "x"
+        ]
+      },
+      "weighted_sos": []
+    },
+    {
+      "multiplier": {
+        "expr": "-x**2 + x",
+        "gens": [
+          "x"
+        ]
+      },
+      "multiplier_factor_indices": [
+        0,
+        1
+      ],
+      "multiplier_factors": [
+        {
+          "expr": "x",
+          "gens": [
+            "x"
+          ]
+        },
+        {
+          "expr": "1 - x",
+          "gens": [
+            "x"
+          ]
+        }
+      ],
+      "sos_poly": {
+        "expr": "1",
+        "gens": [
+          "x"
+        ]
+      },
+      "weighted_sos": [
+        {
+          "poly": {
+            "expr": "1",
+            "gens": [
+              "x"
+            ]
+          },
+          "weight": "1"
+        }
+      ]
+    }
+  ],
+  "exact_identity": {
+    "expr": "-x**2 + x",
+    "gens": [
+      "x"
+    ]
+  },
+  "exact_residual": {
+    "expr": "0",
+    "gens": [
+      "x"
+    ]
+  },
+  "kind": "schmudgen",
+  "max_denominator": 1,
+  "status": "optimal",
+  "success": true
+}

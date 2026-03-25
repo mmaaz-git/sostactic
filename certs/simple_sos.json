@@ -1,0 +1,176 @@
+{
+  "exact_certificate_blocks": [
+    {
+      "multiplier": {
+        "expr": "1",
+        "gens": [
+          "x",
+          "y"
+        ]
+      },
+      "multiplier_factor_indices": [],
+      "multiplier_factors": [],
+      "sos_poly": {
+        "expr": "x**2 + y**2",
+        "gens": [
+          "x",
+          "y"
+        ]
+      },
+      "weighted_sos": [
+        {
+          "poly": {
+            "expr": "y",
+            "gens": [
+              "x",
+              "y"
+            ]
+          },
+          "weight": "1"
+        },
+        {
+          "poly": {
+            "expr": "x",
+            "gens": [
+              "x",
+              "y"
+            ]
+          },
+          "weight": "1"
+        }
+      ]
+    },
+    {
+      "multiplier": {
+        "expr": "-x**2 - y**2",
+        "gens": [
+          "x",
+          "y"
+        ]
+      },
+      "multiplier_factor_indices": [],
+      "multiplier_factors": [],
+      "sos_poly": {
+        "expr": "1",
+        "gens": [
+          "x",
+          "y"
+        ]
+      },
+      "weighted_sos": [
+        {
+          "poly": {
+            "expr": "1",
+            "gens": [
+              "x",
+              "y"
+            ]
+          },
+          "weight": "1"
+        }
+      ]
+    }
+  ],
+  "exact_den_nonzero_coeff_witness": {
+    "coeff": "1",
+    "exponents": [
+      0,
+      0
+    ]
+  },
+  "exact_den_nonzero_witness": {
+    "value": "1",
+    "values": [
+      "0",
+      "0"
+    ]
+  },
+  "exact_den_poly": {
+    "expr": "1",
+    "gens": [
+      "x",
+      "y"
+    ]
+  },
+  "exact_den_sos": [
+    {
+      "poly": {
+        "expr": "1",
+        "gens": [
+          "x",
+          "y"
+        ]
+      },
+      "weight": "1"
+    }
+  ],
+  "exact_identity": {
+    "expr": "0",
+    "gens": [
+      "x",
+      "y"
+    ]
+  },
+  "exact_num_poly": {
+    "expr": "x**2 + y**2",
+    "gens": [
+      "x",
+      "y"
+    ]
+  },
+  "exact_num_sos": [
+    {
+      "poly": {
+        "expr": "y",
+        "gens": [
+          "x",
+          "y"
+        ]
+      },
+      "weight": "1"
+    },
+    {
+      "poly": {
+        "expr": "x",
+        "gens": [
+          "x",
+          "y"
+        ]
+      },
+      "weight": "1"
+    }
+  ],
+  "exact_residual": {
+    "expr": "0",
+    "gens": [
+      "x",
+      "y"
+    ]
+  },
+  "exact_sos": [
+    {
+      "poly": {
+        "expr": "y",
+        "gens": [
+          "x",
+          "y"
+        ]
+      },
+      "weight": "1"
+    },
+    {
+      "poly": {
+        "expr": "x",
+        "gens": [
+          "x",
+          "y"
+        ]
+      },
+      "weight": "1"
+    }
+  ],
+  "kind": "sos",
+  "max_denominator": 1,
+  "status": "optimal",
+  "success": true
+}

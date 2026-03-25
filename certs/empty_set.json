@@ -1,0 +1,119 @@
+{
+  "exact_certificate_blocks": [
+    {
+      "multiplier": {
+        "expr": "1",
+        "gens": [
+          "x"
+        ]
+      },
+      "multiplier_factor_indices": [],
+      "multiplier_factors": [],
+      "sos_poly": {
+        "expr": "1",
+        "gens": [
+          "x"
+        ]
+      },
+      "weighted_sos": [
+        {
+          "poly": {
+            "expr": "1",
+            "gens": [
+              "x"
+            ]
+          },
+          "weight": "1"
+        }
+      ]
+    },
+    {
+      "multiplier": {
+        "expr": "x",
+        "gens": [
+          "x"
+        ]
+      },
+      "multiplier_factor_indices": [
+        0
+      ],
+      "multiplier_factors": [
+        {
+          "expr": "x",
+          "gens": [
+            "x"
+          ]
+        }
+      ],
+      "sos_poly": {
+        "expr": "2",
+        "gens": [
+          "x"
+        ]
+      },
+      "weighted_sos": [
+        {
+          "poly": {
+            "expr": "1",
+            "gens": [
+              "x"
+            ]
+          },
+          "weight": "2"
+        }
+      ]
+    },
+    {
+      "multiplier": {
+        "expr": "-x - 1",
+        "gens": [
+          "x"
+        ]
+      },
+      "multiplier_factor_indices": [
+        1
+      ],
+      "multiplier_factors": [
+        {
+          "expr": "-x - 1",
+          "gens": [
+            "x"
+          ]
+        }
+      ],
+      "sos_poly": {
+        "expr": "2",
+        "gens": [
+          "x"
+        ]
+      },
+      "weighted_sos": [
+        {
+          "poly": {
+            "expr": "1",
+            "gens": [
+              "x"
+            ]
+          },
+          "weight": "2"
+        }
+      ]
+    }
+  ],
+  "exact_identity": {
+    "expr": "-1",
+    "gens": [
+      "x"
+    ]
+  },
+  "exact_residual": {
+    "expr": "0",
+    "gens": [
+      "x"
+    ]
+  },
+  "kind": "putinar",
+  "max_denominator": 1,
+  "status": "optimal",
+  "success": true
+}
