@@ -117,6 +117,7 @@ example (x y : ℝ) (h1 : 0 ≤ 1 - x^2 - y^2) (h2 : 0 ≤ x^2 + y^2 - 2) : Fals
   schmudgen_empty (degree := 2)
 
 -- two disjoint disks centered at (0,0) and (3,3)
+-- linarith and nlinarith fail
 example : ¬∃ x y : ℝ, 0 ≤ 1 - x^2 - y^2 ∧ 0 ≤ 1 - (x - 3)^2 - (y - 3)^2 := by
   rintro ⟨x, y, h1, h2⟩
   schmudgen_empty (degree := 2)
