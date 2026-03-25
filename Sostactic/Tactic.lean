@@ -9,7 +9,7 @@ namespace Sostactic
 -- UTILS
 
 def ppString (e : Expr) : MetaM String := do
-  return (← ppExpr e).pretty.trim
+  return ((← ppExpr e).pretty.trimAscii).toString
 
 def inferTypeString (text : String) : TacticM String := do
   let env ← getEnv
@@ -45,23 +45,23 @@ def normalizeNonnegGoal : TacticM String := do
   let text ← ppString target
   -- 0 ≤ expr
   if text.startsWith "0 ≤" then
-    return (text.drop "0 ≤".length).trim
+    return (text.drop "0 ≤".length).trimAscii.toString
   -- expr ≥ 0
   if text.endsWith "≥ 0" then
-    let expr := (text.dropRight "≥ 0".length).trim
+    let expr := (text.dropEnd "≥ 0".length).trimAscii.toString
     evalTacticString s!"suffices _h_sostactic : (0 : ℝ) ≤ {expr} by linarith"
     return expr
   -- a ≤ b
   match text.splitOn " ≤ " with
   | [lhs, rhs] =>
-    let diff := s!"{rhs.trim} - ({lhs.trim})"
+    let diff := s!"{rhs.trimAscii} - ({lhs.trimAscii})"
     evalTacticString s!"suffices _h_sostactic : (0 : ℝ) ≤ {diff} by linarith"
     return diff
   | _ =>
   -- a ≥ b
   match text.splitOn " ≥ " with
   | [lhs, rhs] =>
-    let diff := s!"{lhs.trim} - ({rhs.trim})"
+    let diff := s!"{lhs.trimAscii} - ({rhs.trimAscii})"
     evalTacticString s!"suffices _h_sostactic : (0 : ℝ) ≤ {diff} by linarith"
     return diff
   | _ =>
@@ -88,7 +88,7 @@ def tryEvalTacticString (text : String) : TacticM Unit := do
   let hbSaved ← IO.getNumHeartbeats
   let msgsSaved := (← getThe Core.State).messages
   try
-    withOptions (fun opts => opts.setNat `maxHeartbeats 800000) do
+    withOptions (fun opts => opts.set `maxHeartbeats (800000 : Nat)) do
       evalTacticString text
   catch _ =>
     saved.restore (restoreInfo := true)
@@ -105,7 +105,7 @@ def trySolveHeadGoalWithTacticString (text : String) (maxHeartbeats? : Option Na
       try
         match maxHeartbeats? with
         | some n =>
-            withOptions (fun opts => opts.setNat `maxHeartbeats n) do
+            withOptions (fun opts => opts.set `maxHeartbeats n) do
               evalTacticString text
         | none =>
             evalTacticString text
@@ -166,8 +166,8 @@ def takeLeadingDigits (chars : List Char) : String × List Char :=
         if c.isDigit then
           go (c :: acc) cs
         else
-          (String.mk acc.reverse, rest)
-    | [] => (String.mk acc.reverse, [])
+          (String.ofList acc.reverse, rest)
+    | [] => (String.ofList acc.reverse, [])
   go [] chars
 
 partial def dropLeadingWhitespace : List Char → List Char
@@ -188,7 +188,7 @@ partial def normalizeRationalDivs (text : String) : String :=
           s!" * (MvPolynomial.C (1 / {digits} : ℝ))" ++ go rest
     | c :: cs => String.singleton c ++ go cs
     | [] => ""
-  go text.data
+  go text.toList
 
 def mvPolyTypeString (nvars : Nat) : String :=
   s!"MvPolynomial (Fin {nvars}) ℝ"
@@ -319,23 +319,23 @@ def extractNonnegConstraints : TacticM (Array String) := do
       let typeText ← ppString localDecl.type
       let name := localDecl.userName
       if typeText.startsWith "0 ≤" then
-        constraints := constraints.push (typeText.drop "0 ≤".length).trim
+        constraints := constraints.push (typeText.drop "0 ≤".length).trimAscii.toString
       else if typeText.endsWith "≥ 0" then
-        let expr := (typeText.dropRight "≥ 0".length).trim
+        let expr := (typeText.dropEnd "≥ 0".length).trimAscii.toString
         constraints := constraints.push expr
         evalTacticString s!"have _h_norm_{idx} : (0 : ℝ) ≤ {expr} := by linarith [{name}]"
         idx := idx + 1
       else
         match typeText.splitOn " ≤ " with
         | [lhs, rhs] =>
-            let expr := s!"{rhs.trim} - ({lhs.trim})"
+            let expr := s!"{rhs.trimAscii} - ({lhs.trimAscii})"
             constraints := constraints.push expr
             evalTacticString s!"have _h_norm_{idx} : (0 : ℝ) ≤ {expr} := by linarith [{name}]"
             idx := idx + 1
         | _ =>
           match typeText.splitOn " ≥ " with
           | [lhs, rhs] =>
-              let expr := s!"{lhs.trim} - ({rhs.trim})"
+              let expr := s!"{lhs.trimAscii} - ({rhs.trimAscii})"
               constraints := constraints.push expr
               evalTacticString s!"have _h_norm_{idx} : (0 : ℝ) ≤ {expr} := by linarith [{name}]"
               idx := idx + 1

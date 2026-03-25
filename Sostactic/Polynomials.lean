@@ -3,7 +3,7 @@ Formalization of lemmas about multivariate polynomials over ℝ.
 -/
 import Mathlib.Algebra.MvPolynomial.Basic
 import Mathlib.Algebra.Polynomial.Basic
-import Mathlib.Algebra.Polynomial.Degree.Definitions
+import Mathlib.Algebra.Polynomial.Degree.Defs
 import Mathlib.Algebra.CharZero.Infinite
 import Mathlib.Topology.MetricSpace.Pseudo.Basic
 import Mathlib.Topology.Order.Basic

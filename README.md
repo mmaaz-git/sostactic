@@ -59,6 +59,8 @@ lake update sostactic
 lake build
 ```
 
+> **Note:** Sostactic tracks Mathlib `v4.29.0-rc8`. If your project uses a different Mathlib version, you may need to align them. When creating a new project, the default Mathlib version should match.
+
 ### 2. Set up the Python environment
 
 Create a virtual environment in your project root and install the dependencies:
