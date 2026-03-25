@@ -2,7 +2,10 @@
 
 This is a collection of Lean4 tactics for proving polynomial inequalities via _sum-of-squares (SOS) decompositions_, powered by a Python backend.
 
-These tactics are significantly more powerful than `nlinarith` and `positivity` -- i.e., they can prove inequalities they cannot.
+These tactics are significantly more powerful than `nlinarith` and `positivity` -- i.e., they can prove inequalities they cannot. In theory, they can be used to prove any of the following types of statements
+- prove that a polynomial is nonnegative globally
+- prove that a polynomial is nonnegative over a semialgebraic set (i.e., defined by a set of polynomial inequalities)
+- prove that a semialgebraic set is empty, i.e., that a system of polynomial inequalities is infeasible
 
 ## Quick Example
 
