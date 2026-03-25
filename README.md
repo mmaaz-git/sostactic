@@ -36,7 +36,16 @@ example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ -x - 1) : False := by
 
 ### 1. Add the dependency
 
-In your project's `lakefile.lean`:
+If your project uses `lakefile.toml`:
+
+```toml
+[[require]]
+name = "sostactic"
+git = "https://github.com/mmaaz-git/sostactic.git"
+rev = "main"
+```
+
+Or if your project uses `lakefile.lean`:
 
 ```lean
 require sostactic from git
