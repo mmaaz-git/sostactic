@@ -67,7 +67,8 @@ Create a virtual environment in your project root and install the dependencies:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r .lake/packages/Sostactic/python/requirements.txt
+.venv/bin/python3 -m ensurepip
+.venv/bin/python3 -m pip install -r .lake/packages/Sostactic/python/requirements.txt
 ```
 
 That's it. Sostactic auto-discovers `.venv/bin/python3` in your project root.
