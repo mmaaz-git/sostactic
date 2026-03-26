@@ -236,8 +236,6 @@ def finsuppMonomialString (nvars : Nat) (exponents : List Nat) : String :=
 def runSosDecomp (denomDegreeBound : Nat := 0)
     (denomTemplate : Option String := none)
     (certFile : Option String := none) : TacticM Unit := do
-  let hbStart ← IO.getNumHeartbeats
-  IO.setNumHeartbeats 0
   let goalTarget ← normalizeNonnegGoal
   let typeText ← inferTypeString goalTarget
   unless typeText == "ℝ" do
@@ -277,13 +275,12 @@ def runSosDecomp (denomDegreeBound : Nat := 0)
     match coeffWitness with
     | some w =>
         let monom := finsuppMonomialString nvars w.exponents
-        tryEvalTacticString s!"case hD_ne => rw [MvPolynomial.ne_zero_iff]; refine ⟨{monom}, ?_⟩; dsimp [D, {xRefs}]; simp [MvPolynomial.C_mul_X_pow_eq_monomial, MvPolynomial.coeff_X_pow, Finsupp.single_eq_single_iff]"
+        tryEvalTacticString s!"case hD_ne => rw [MvPolynomial.ne_zero_iff]; refine ⟨{monom}, ?_⟩; dsimp [D, {xRefs}]; simp [MvPolynomial.C_mul_X_pow_eq_monomial, Finsupp.single_eq_single_iff]"
     | none =>
         pure ()
     tryEvalTacticString s!"case hmul => apply MvPolynomial.funext; intro v; simp [{mulRefs}]; ring_nf"
     tryEvalTacticString s!"case hD_nonneg => intro v; simp [D, {xRefs}]; positivity"
     tryEvalTacticString s!"case hN_nonneg => intro v; simp [N, {xRefs}]; positivity"
-    IO.setNumHeartbeats hbStart
     return
 
   let exactSos := result.exact_sos.getD []
@@ -291,7 +288,6 @@ def runSosDecomp (denomDegreeBound : Nat := 0)
   evalTacticString s!"have sostactic_sos_identity : (({goalTarget}) : {typeText}) = {rhs} := by ring_nf"
   evalTacticString s!"rw [sostactic_sos_identity]"
   evalTacticString "positivity"
-  IO.setNumHeartbeats hbStart
 
 syntax (name := sosDecompTac) "sos_decomp" : tactic
 syntax (name := sosDecompDegreeTac) "sos_decomp" "(" "degree" ":=" num ")" : tactic
@@ -364,8 +360,6 @@ def pstvCertRhs (constraintExprs : Array String)
 def runPstvDecomp (command : String) (degreeBound : Nat)
     (blockBases : Option String := none)
     (certFile : Option String := none) : TacticM Unit := do
-  let hbStart ← IO.getNumHeartbeats
-  IO.setNumHeartbeats 0
   let goalTarget ← normalizeNonnegGoal
   let constraints ← extractNonnegConstraints
   if constraints.isEmpty then
@@ -384,13 +378,10 @@ def runPstvDecomp (command : String) (degreeBound : Nat)
   evalTacticString s!"have _h_pstv_cert : (({goalTarget}) : ℝ) = {rhs} := by ring_nf"
   evalTacticString "rw [_h_pstv_cert]"
   evalTacticString "positivity"
-  IO.setNumHeartbeats hbStart
 
 def runPstvEmpty (command : String) (degreeBound : Nat)
     (blockBases : Option String := none)
     (certFile : Option String := none) : TacticM Unit := do
-  let hbStart ← IO.getNumHeartbeats
-  IO.setNumHeartbeats 0
   let constraints ← extractNonnegConstraints
   if constraints.isEmpty then
     throwError "{command} requires at least one constraint hypothesis of the form '0 ≤ g'"
@@ -408,7 +399,6 @@ def runPstvEmpty (command : String) (degreeBound : Nat)
   evalTacticString s!"have _h_pstv_cert : (-1 : ℝ) = {rhs} := by ring_nf"
   evalTacticString s!"have _h_pstv_nonneg : (0 : ℝ) ≤ {rhs} := by positivity"
   evalTacticString "linarith"
-  IO.setNumHeartbeats hbStart
 
 syntax (name := putinarDecompTac) "putinar_decomp" "(" "degree" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
 syntax (name := schmudgenDecompTac) "schmudgen_decomp" "(" "degree" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
