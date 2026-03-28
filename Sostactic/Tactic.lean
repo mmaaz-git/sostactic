@@ -6,6 +6,14 @@ open Lean Meta Elab Tactic Parser
 
 namespace Sostactic
 
+-- PROOF HELPERS
+
+lemma nonneg_of_eq_nonneg {a b : ℝ} (h_eq : a = b) (h_nonneg : 0 ≤ b) : 0 ≤ a := by
+  rw [h_eq]; exact h_nonneg
+
+lemma false_of_neg_one_eq_nonneg {b : ℝ} (h_eq : (-1 : ℝ) = b) (h_nonneg : 0 ≤ b) : False := by
+  linarith
+
 -- UTILS
 
 def ppString (e : Expr) : MetaM String := do
@@ -37,7 +45,8 @@ def parseTacticString (text : String) : TacticM Syntax := do
   | .error err => throwError "failed to parse tactic:\n{text}\n\n{err}"
 
 def evalTacticString (text : String) : TacticM Unit := do
-  evalTactic (← parseTacticString text)
+  withEnableInfoTree false do
+    evalTactic (← parseTacticString text)
 
 def normalizeNonnegGoal : TacticM String := do
   let goal ← getMainGoal
@@ -81,7 +90,8 @@ def parseTacticSeqString (text : String) : TacticM (TSyntax `Lean.Parser.Tactic.
     throwError "failed to parse tactic sequence:\n{text}\n\n{errMsg}"
 
 def evalTacticSeqString (text : String) : TacticM Unit := do
-  evalTactic (← parseTacticSeqString text)
+  withEnableInfoTree false do
+    evalTactic (← parseTacticSeqString text)
 
 def tryEvalTacticString (text : String) : TacticM Unit := do
   let saved ← Tactic.saveState
@@ -281,13 +291,14 @@ def runSosDecomp (denomDegreeBound : Nat := 0)
     tryEvalTacticString s!"case hmul => apply MvPolynomial.funext; intro v; simp [{mulRefs}]; ring_nf"
     tryEvalTacticString s!"case hD_nonneg => intro v; simp [D, {xRefs}]; positivity"
     tryEvalTacticString s!"case hN_nonneg => intro v; simp [N, {xRefs}]; positivity"
+    pruneSolvedGoals
     return
 
   let exactSos := result.exact_sos.getD []
   let rhs := weightedSumString typeText exactSos
-  evalTacticString s!"have sostactic_sos_identity : (({goalTarget}) : {typeText}) = {rhs} := by ring_nf"
-  evalTacticString s!"rw [sostactic_sos_identity]"
-  evalTacticString "positivity"
+  evalTacticString s!"refine nonneg_of_eq_nonneg (b := {rhs}) ?sos_identity ?sos_nonneg"
+  tryEvalTacticString "case sos_identity => ring_nf"
+  tryEvalTacticString "case sos_nonneg => positivity"
 
 syntax (name := sosDecompTac) "sos_decomp" : tactic
 syntax (name := sosDecompDegreeTac) "sos_decomp" "(" "degree" ":=" num ")" : tactic
@@ -375,9 +386,9 @@ def runPstvDecomp (command : String) (degreeBound : Nat)
     | none => throwError "{command} backend failed to find a certificate"
   let blocks := result.exact_certificate_blocks.getD []
   let rhs := pstvCertRhs constraints blocks
-  evalTacticString s!"have _h_pstv_cert : (({goalTarget}) : ℝ) = {rhs} := by ring_nf"
-  evalTacticString "rw [_h_pstv_cert]"
-  evalTacticString "positivity"
+  evalTacticString s!"refine nonneg_of_eq_nonneg (b := {rhs}) ?pstv_identity ?pstv_nonneg"
+  tryEvalTacticString "case pstv_identity => ring_nf"
+  tryEvalTacticString "case pstv_nonneg => positivity"
 
 def runPstvEmpty (command : String) (degreeBound : Nat)
     (blockBases : Option String := none)
@@ -396,9 +407,9 @@ def runPstvEmpty (command : String) (degreeBound : Nat)
     | none => throwError "{command} backend failed to find an emptiness certificate"
   let blocks := result.exact_certificate_blocks.getD []
   let rhs := pstvCertRhs constraints blocks
-  evalTacticString s!"have _h_pstv_cert : (-1 : ℝ) = {rhs} := by ring_nf"
-  evalTacticString s!"have _h_pstv_nonneg : (0 : ℝ) ≤ {rhs} := by positivity"
-  evalTacticString "linarith"
+  evalTacticString s!"refine false_of_neg_one_eq_nonneg (b := {rhs}) ?pstv_identity ?pstv_nonneg"
+  tryEvalTacticString "case pstv_identity => ring_nf"
+  tryEvalTacticString "case pstv_nonneg => positivity"
 
 syntax (name := putinarDecompTac) "putinar_decomp" "(" "degree" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
 syntax (name := schmudgenDecompTac) "schmudgen_decomp" "(" "degree" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
