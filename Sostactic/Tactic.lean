@@ -295,12 +295,12 @@ syntax (name := sosDecompTemplateTac) "sos_decomp" "(" "degree" ":=" num ")" "("
 syntax (name := sosDecompCertTac) "sos_decomp" "(" "cert" ":=" str ")" : tactic
 
 elab_rules : tactic
-  | `(tactic| sos_decomp) => runSosDecomp
-  | `(tactic| sos_decomp (degree := $d:num)) => runSosDecomp d.getNat
+  | `(tactic| sos_decomp) => Lean.Elab.Tactic.focus do runSosDecomp
+  | `(tactic| sos_decomp (degree := $d:num)) => Lean.Elab.Tactic.focus do runSosDecomp d.getNat
   | `(tactic| sos_decomp (degree := $d:num) (denom_template := $t:str)) =>
-    runSosDecomp d.getNat (some t.getString)
+    Lean.Elab.Tactic.focus do runSosDecomp d.getNat (some t.getString)
   | `(tactic| sos_decomp (cert := $c:str)) =>
-    runSosDecomp (certFile := some c.getString)
+    Lean.Elab.Tactic.focus do runSosDecomp (certFile := some c.getString)
 
 -- POSITIVSTELLENSATZ (PUTINAR / SCHMUDGEN)
 
@@ -411,20 +411,20 @@ syntax (name := schmudgenEmptyCertTac) "schmudgen_empty" "(" "cert" ":=" str ")"
 
 elab_rules : tactic
   | `(tactic| putinar_decomp (degree := $d:num) $[( block_bases := $bb:str )]?) =>
-    runPstvDecomp "putinar" d.getNat (bb.map (·.getString))
+    Lean.Elab.Tactic.focus do runPstvDecomp "putinar" d.getNat (bb.map (·.getString))
   | `(tactic| schmudgen_decomp (degree := $d:num) $[( block_bases := $bb:str )]?) =>
-    runPstvDecomp "schmudgen" d.getNat (bb.map (·.getString))
+    Lean.Elab.Tactic.focus do runPstvDecomp "schmudgen" d.getNat (bb.map (·.getString))
   | `(tactic| putinar_empty (degree := $d:num) $[( block_bases := $bb:str )]?) =>
-    runPstvEmpty "putinar" d.getNat (bb.map (·.getString))
+    Lean.Elab.Tactic.focus do runPstvEmpty "putinar" d.getNat (bb.map (·.getString))
   | `(tactic| schmudgen_empty (degree := $d:num) $[( block_bases := $bb:str )]?) =>
-    runPstvEmpty "schmudgen" d.getNat (bb.map (·.getString))
+    Lean.Elab.Tactic.focus do runPstvEmpty "schmudgen" d.getNat (bb.map (·.getString))
   | `(tactic| putinar_decomp (cert := $c:str)) =>
-    runPstvDecomp "putinar" 0 (certFile := some c.getString)
+    Lean.Elab.Tactic.focus do runPstvDecomp "putinar" 0 (certFile := some c.getString)
   | `(tactic| schmudgen_decomp (cert := $c:str)) =>
-    runPstvDecomp "schmudgen" 0 (certFile := some c.getString)
+    Lean.Elab.Tactic.focus do runPstvDecomp "schmudgen" 0 (certFile := some c.getString)
   | `(tactic| putinar_empty (cert := $c:str)) =>
-    runPstvEmpty "putinar" 0 (certFile := some c.getString)
+    Lean.Elab.Tactic.focus do runPstvEmpty "putinar" 0 (certFile := some c.getString)
   | `(tactic| schmudgen_empty (cert := $c:str)) =>
-    runPstvEmpty "schmudgen" 0 (certFile := some c.getString)
+    Lean.Elab.Tactic.focus do runPstvEmpty "schmudgen" 0 (certFile := some c.getString)
 
 end Sostactic
