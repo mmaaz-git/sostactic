@@ -296,7 +296,7 @@ def runSosDecomp (denomDegreeBound : Nat := 0)
 
   let exactSos := result.exact_sos.getD []
   let rhs := weightedSumString typeText exactSos
-  evalTacticString s!"refine nonneg_of_eq_nonneg (b := {rhs}) ?sos_identity ?sos_nonneg"
+  evalTacticString s!"refine Sostactic.nonneg_of_eq_nonneg (b := {rhs}) ?sos_identity ?sos_nonneg"
   tryEvalTacticString "case sos_identity => ring_nf"
   tryEvalTacticString "case sos_nonneg => positivity"
 
@@ -386,7 +386,7 @@ def runPstvDecomp (command : String) (degreeBound : Nat)
     | none => throwError "{command} backend failed to find a certificate"
   let blocks := result.exact_certificate_blocks.getD []
   let rhs := pstvCertRhs constraints blocks
-  evalTacticString s!"refine nonneg_of_eq_nonneg (b := {rhs}) ?pstv_identity ?pstv_nonneg"
+  evalTacticString s!"refine Sostactic.nonneg_of_eq_nonneg (b := {rhs}) ?pstv_identity ?pstv_nonneg"
   tryEvalTacticString "case pstv_identity => ring_nf"
   tryEvalTacticString "case pstv_nonneg => positivity"
 
@@ -407,7 +407,7 @@ def runPstvEmpty (command : String) (degreeBound : Nat)
     | none => throwError "{command} backend failed to find an emptiness certificate"
   let blocks := result.exact_certificate_blocks.getD []
   let rhs := pstvCertRhs constraints blocks
-  evalTacticString s!"refine false_of_neg_one_eq_nonneg (b := {rhs}) ?pstv_identity ?pstv_nonneg"
+  evalTacticString s!"refine Sostactic.false_of_neg_one_eq_nonneg (b := {rhs}) ?pstv_identity ?pstv_nonneg"
   tryEvalTacticString "case pstv_identity => ring_nf"
   tryEvalTacticString "case pstv_nonneg => positivity"
 
