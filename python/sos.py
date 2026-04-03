@@ -163,6 +163,33 @@ def _poly_total_degree(poly: sp.Poly) -> int:
     """
     return max((sum(mon) for mon in poly.monoms()), default=0)
 
+def _basis_degree_bound(basis) -> int:
+    """
+    Return the effective SOS degree bound represented by a monomial basis.
+    """
+    return 2 * max((sum(mon) for mon in basis), default=0)
+
+def _basis_from_degree_override(nvars: int, degree_bound: int):
+    """
+    Convert a degree-level basis override to an explicit monomial basis.
+    """
+    if degree_bound < 0 or degree_bound % 2 != 0:
+        raise ValueError("basis override degrees must be nonnegative even integers")
+    return monomial_basis_with_degree_bound(nvars, degree_bound)
+
+def _restrict_basis(default_basis, nvars: int, degree_bound: int, block_index: int):
+    """
+    Restrict a block basis using a degree-level override.
+    """
+    override_basis = _basis_from_degree_override(nvars, degree_bound)
+    override_set = set(override_basis)
+    default_set = set(default_basis)
+    if not override_set.issubset(default_set):
+        raise ValueError(
+            f"basis override for block {block_index} exceeds the basis allowed by the chosen order"
+        )
+    return [mon for mon in default_basis if mon in override_set]
+
 def _block_basis_from_order(nvars: int, order: int, multiplier: sp.Poly):
     """
     Return the SOS monomial basis allowed by relaxation order ``order``.
@@ -1035,34 +1062,126 @@ def _block_diagnostics(result: dict):
     """Per-block size/rank/eigenvalue diagnostics for failed exactification."""
     diags = []
     blocks = result.get("blocks", [])
+    spectra = []
+    total_trace = 0.0
+    total_coeff_mass = 0.0
     for i, Q in enumerate(result.get("block_grams", [])):
         if Q is None or Q.ndim < 2:
             continue
-        evals, evecs = np.linalg.eigh(Q)
+        evals, evecs = np.linalg.eigh(0.5 * (Q + Q.T))
+        trace = float(np.sum(np.clip(evals, 0.0, None)))
+        poly = _block_poly_from_gram(sp.Matrix(Q), blocks[i]) if i < len(blocks) else None
+        degree_mass = defaultdict(float)
+        max_coeff_mag = 0.0
+        coeff_mass = 0.0
+        if poly is not None:
+            for mon, coeff in poly.as_dict().items():
+                mag = abs(float(coeff))
+                if mag == 0.0:
+                    continue
+                degree_mass[sum(mon)] += mag
+                coeff_mass += mag
+                max_coeff_mag = max(max_coeff_mag, mag)
+        spectra.append((i, Q, evals, evecs, trace, poly, dict(degree_mass), coeff_mass, max_coeff_mag))
+        total_trace += trace
+        total_coeff_mass += coeff_mass
+
+    total_trace = total_trace if total_trace > 0 else 1.0
+    total_coeff_mass = total_coeff_mass if total_coeff_mass > 0 else 1.0
+
+    for i, Q, evals, evecs, trace, poly, degree_mass, coeff_mass, max_coeff_mag in spectra:
         rank = int(np.sum(evals > 1e-6))
+        trace_ratio = trace / total_trace
         diag = {
             "block": blocks[i].get("source_block_index", i) if i < len(blocks) else i,
+            "multiplier": str(blocks[i]["multiplier"].as_expr()) if i < len(blocks) else None,
             "size": Q.shape[0],
             "numeric_rank": rank,
             "min_eigenvalue": float(evals[0]),
+            "trace": trace,
+            "trace_ratio": trace_ratio,
         }
-        # Compute eigenvalue-weighted monomial contributions to find active degree
         if i < len(blocks) and "basis" in blocks[i]:
             basis = blocks[i]["basis"]
-            current_max_deg = max(sum(m) for m in basis)
-            diag["current_degree_bound"] = 2 * current_max_deg
+            current_degree_bound = _basis_degree_bound(basis)
+            diag["current_degree_bound"] = current_degree_bound
+            diag["current_basis_degree_bound"] = current_degree_bound
             contrib = np.zeros(len(basis))
             for j in range(len(evals)):
                 if evals[j] > 0:
                     contrib += evals[j] * evecs[:, j] ** 2
             total = np.sum(contrib)
-            if total > 0:
-                active = contrib / total > 1e-3
-                if np.any(active):
-                    max_deg = max(sum(basis[j]) for j in range(len(basis)) if active[j])
-                    diag["suggested_degree_bound"] = 2 * max_deg
+            diag["aggressive_constant_candidate"] = current_degree_bound > 0 and rank <= 1
+            suggested_degree_bound = current_degree_bound
+            if coeff_mass > 0.0:
+                cutoff = max(max_coeff_mag * 1e-6, coeff_mass * 1e-8, 1e-12)
+                active_poly_degrees = sorted(
+                    degree for degree, mass in degree_mass.items() if mass > cutoff
+                )
+                if active_poly_degrees:
+                    max_poly_degree = max(active_poly_degrees)
+                    suggested_degree_bound = 2 * ((max_poly_degree + 1) // 2)
+                else:
+                    suggested_degree_bound = 0
+                diag["poly_degree_mass"] = degree_mass
+                diag["poly_coeff_mass"] = coeff_mass
+                diag["poly_coeff_mass_ratio"] = coeff_mass / total_coeff_mass
+            elif trace_ratio < 1e-8:
+                suggested_degree_bound = 0
+
+            diag["suggested_degree_bound"] = suggested_degree_bound
+            diag["suggested_basis_degree_bound"] = suggested_degree_bound
+            if suggested_degree_bound == 0 and current_degree_bound > 0:
+                diag["status"] = "constant_only"
+            elif trace_ratio < 1e-8:
+                diag["status"] = "near_zero"
+            elif suggested_degree_bound < current_degree_bound:
+                diag["status"] = "oversized"
+            else:
+                diag["status"] = "stable"
         diags.append(diag)
     return diags
+
+def _format_basis_overrides(basis_overrides: dict[int, int]):
+    """
+    Format basis overrides as a CLI/Lean-friendly string.
+    """
+    return ",".join(f"{block}:{degree}" for block, degree in sorted(basis_overrides.items()))
+
+def _basis_override_suggestion(result: dict):
+    """
+    Return a heuristic basis-override suggestion from block diagnostics.
+
+    This does not re-solve the SDP. One backend call should perform exactly one
+    SDP solve; the user applies the suggested overrides in a second explicit run.
+    """
+    block_diagnostics = result.get("block_diagnostics", [])
+    if not block_diagnostics:
+        return None
+
+    reducible = {
+        d["block"]: d["suggested_degree_bound"]
+        for d in block_diagnostics
+        if d.get("suggested_degree_bound", d.get("current_degree_bound", 0))
+        < d.get("current_degree_bound", 0)
+    }
+    low_rank_constant = {
+        d["block"]: 0
+        for d in block_diagnostics
+        if d.get("aggressive_constant_candidate") and d.get("current_degree_bound", 0) > 0
+    }
+
+    heuristic = dict(sorted(reducible.items()))
+    for block, degree in sorted(low_rank_constant.items()):
+        heuristic[block] = min(degree, heuristic.get(block, degree))
+
+    if not heuristic:
+        return None
+
+    return {
+        "overrides": heuristic,
+        "text": f'try basis_overrides := "{_format_basis_overrides(heuristic)}"',
+    }
 
 def _normalize_positivstellensatz_input(constraints, target):
     """
@@ -1076,7 +1195,7 @@ def putinar(
     target,
     constraints,
     order: int,
-    block_bases: dict[int, list] | None = None,
+    basis_overrides: dict[int, int] | None = None,
 ):
     """
     Prove that target >= 0 on the semialgebraic set {x : g_1(x) >= 0, ..., g_m(x) >= 0}
@@ -1094,14 +1213,11 @@ def putinar(
             truncation deg(h * sigma) <= 2r, so sigma is built from monomials
             of degree at most floor((2r - deg(h)) / 2). This is the standard
             truncated Putinar hierarchy.
-        block_bases: optional dict mapping block index to a monomial basis list,
-            overriding the default full-degree basis for that block. Useful when
-            exactification fails due to rank-deficient Gram matrices: run once
-            without ``block_bases`` and check ``block_diagnostics`` in the
-            returned dict to find blocks whose ``numeric_rank`` is less than
-            ``size``, then re-run with a smaller basis for those blocks
-            (e.g. ``{3: monomial_basis_with_degree_bound(n, 4)}`` to give
-            block 3 a degree-4 basis instead of the default).
+        basis_overrides: optional dict mapping a block index to a smaller SOS
+            degree cap for that block. Overrides are restrictive only: they
+            must be subsets of the basis already allowed by ``order``. Useful
+            when exactification fails numerically after the SDP is feasible
+            (e.g. ``{0: 2, 3: 0}``).
     """
     target, constraints = _normalize_positivstellensatz_input(constraints, target)
     gens = target.gens
@@ -1109,7 +1225,9 @@ def putinar(
     order = _resolve_pstv_order(order)
     blocks = []
     for i, h in enumerate(multipliers):
-        basis = block_bases[i] if block_bases and i in block_bases else _block_basis_from_order(len(gens), order, h)
+        basis = _block_basis_from_order(len(gens), order, h)
+        if basis_overrides and i in basis_overrides:
+            basis = _restrict_basis(basis, len(gens), basis_overrides[i], i)
         if not basis:
             continue
         blocks.append({
@@ -1126,26 +1244,30 @@ def putinar(
     result["order"] = order
     if not result["success"]:
         result["block_diagnostics"] = _block_diagnostics(result)
+        basis_override_suggestion = _basis_override_suggestion(result)
+        if basis_override_suggestion is not None:
+            result["basis_override_suggestion"] = basis_override_suggestion
+            result["suggestion"] = basis_override_suggestion["text"]
     return result
 
 def putinar_empty(
     constraints,
     order: int,
-    block_bases: dict[int, list] | None = None,
+    basis_overrides: dict[int, int] | None = None,
 ):
     """
     Prove that {x : g_1(x) >= 0, ..., g_m(x) >= 0} is empty using Putinar's
     Positivstellensatz. Equivalent to putinar(-1, constraints, order=order).
 
-    See :func:`putinar` for the meaning of ``block_bases``.
+    See :func:`putinar` for the meaning of ``basis_overrides``.
     """
-    return putinar(-1, constraints, order, block_bases=block_bases)
+    return putinar(-1, constraints, order, basis_overrides=basis_overrides)
 
 def schmudgen(
     target,
     constraints,
     order: int,
-    block_bases: dict[int, list] | None = None,
+    basis_overrides: dict[int, int] | None = None,
 ):
     """
     Prove that target >= 0 on the semialgebraic set {x : g_1(x) >= 0, ..., g_m(x) >= 0}
@@ -1170,14 +1292,11 @@ def schmudgen(
             truncation deg(h * sigma) <= 2r, so sigma is built from monomials
             of degree at most floor((2r - deg(h)) / 2). This is the standard
             truncated Schmudgen hierarchy.
-        block_bases: optional dict mapping block index to a monomial basis list,
-            overriding the default full-degree basis for that block. Useful when
-            exactification fails due to rank-deficient Gram matrices: run once
-            without ``block_bases`` and check ``block_diagnostics`` in the
-            returned dict to find blocks whose ``numeric_rank`` is less than
-            ``size``, then re-run with a smaller basis for those blocks
-            (e.g. ``{3: monomial_basis_with_degree_bound(n, 4)}`` to give
-            block 3 a degree-4 basis instead of the default).
+        basis_overrides: optional dict mapping a block index to a smaller SOS
+            degree cap for that block. Overrides are restrictive only: they
+            must be subsets of the basis already allowed by ``order``. Useful
+            when exactification fails numerically after the SDP is feasible
+            (e.g. ``{0: 2, 7: 0}``).
     """
     target, gs = _normalize_positivstellensatz_input(constraints, target)
     gens = target.gens
@@ -1196,7 +1315,9 @@ def schmudgen(
     order = _resolve_pstv_order(order)
     blocks = []
     for i, h in enumerate(multipliers):
-        basis = block_bases[i] if block_bases and i in block_bases else _block_basis_from_order(len(gens), order, h)
+        basis = _block_basis_from_order(len(gens), order, h)
+        if basis_overrides and i in basis_overrides:
+            basis = _restrict_basis(basis, len(gens), basis_overrides[i], i)
         if not basis:
             continue
         blocks.append({
@@ -1213,20 +1334,24 @@ def schmudgen(
     result["order"] = order
     if not result["success"]:
         result["block_diagnostics"] = _block_diagnostics(result)
+        basis_override_suggestion = _basis_override_suggestion(result)
+        if basis_override_suggestion is not None:
+            result["basis_override_suggestion"] = basis_override_suggestion
+            result["suggestion"] = basis_override_suggestion["text"]
     return result
 
 def schmudgen_empty(
     constraints,
     order: int,
-    block_bases: dict[int, list] | None = None,
+    basis_overrides: dict[int, int] | None = None,
 ):
     """
     Prove that {x : g_1(x) >= 0, ..., g_m(x) >= 0} is empty using Schmudgen's
     Positivstellensatz. Equivalent to schmudgen(-1, constraints, order=order).
 
-    See :func:`schmudgen` for the meaning of ``block_bases``.
+    See :func:`schmudgen` for the meaning of ``basis_overrides``.
     """
-    return schmudgen(-1, constraints, order, block_bases=block_bases)
+    return schmudgen(-1, constraints, order, basis_overrides=basis_overrides)
 
 # CLI
 
@@ -1351,14 +1476,21 @@ def _serialize_result(result: dict):
         }
     if "block_diagnostics" in result:
         payload["block_diagnostics"] = result["block_diagnostics"]
+    if "basis_override_suggestion" in result:
+        payload["basis_override_suggestion"] = {
+            "overrides": [
+                {"block": block, "degree": degree}
+                for block, degree in sorted(result["basis_override_suggestion"]["overrides"].items())
+            ],
+        }
     if "diagnostics" in result:
         payload["diagnostics"] = result["diagnostics"]
     # Surface a top-level suggestion string for Lean tactic error messages
     if not result["success"]:
-        suggestion = None
-        if "diagnostics" in result:
+        suggestion = result.get("suggestion")
+        if suggestion is None and "diagnostics" in result:
             suggestion = result["diagnostics"].get("suggestion")
-        elif "block_diagnostics" in result:
+        elif suggestion is None and "block_diagnostics" in result:
             reducible = [
                 b for b in result["block_diagnostics"]
                 if "suggested_degree_bound" in b
@@ -1369,19 +1501,19 @@ def _serialize_result(result: dict):
                 for b in reducible:
                     bb_parts.append(f"{b['block']}:{b['suggested_degree_bound']}")
                 bb_str = ",".join(bb_parts)
-                suggestion = f'try block_bases := "{bb_str}"'
+                suggestion = f'try basis_overrides := "{bb_str}"'
         if suggestion:
             payload["suggestion"] = suggestion
     return payload
 
-def _parse_block_bases(s, n_vars):
-    """Parse block-bases string like '3:4,1:2' into {3: basis_deg4, 1: basis_deg2}."""
+def _parse_basis_overrides(s):
+    """Parse basis-overrides string like '3:4,1:2' into {3: 4, 1: 2}."""
     if s is None:
         return None
     result = {}
     for part in s.split(","):
         block_str, deg_str = part.strip().split(":")
-        result[int(block_str)] = monomial_basis_with_degree_bound(n_vars, int(deg_str))
+        result[int(block_str)] = int(deg_str)
     return result
 
 def _run_cli(args):
@@ -1414,14 +1546,14 @@ def _run_cli(args):
         gens = _parse_vars(args.vars)
         if gens is None:
             gens = _common_gens([target] + constraints)
-        block_bases = _parse_block_bases(getattr(args, 'block_bases', None), len(gens))
+        basis_overrides = _parse_basis_overrides(getattr(args, 'basis_overrides', None))
         target = _poly(target, gens)
         constraints = [_poly(g, gens) for g in constraints]
         result = putinar(
             target,
             constraints,
             order=args.order,
-            block_bases=block_bases,
+            basis_overrides=basis_overrides,
         )
     else:
         target = sp.sympify(args.poly)
@@ -1429,14 +1561,14 @@ def _run_cli(args):
         gens = _parse_vars(args.vars)
         if gens is None:
             gens = _common_gens([target] + constraints)
-        block_bases = _parse_block_bases(getattr(args, 'block_bases', None), len(gens))
+        basis_overrides = _parse_basis_overrides(getattr(args, 'basis_overrides', None))
         target = _poly(target, gens)
         constraints = [_poly(g, gens) for g in constraints]
         result = schmudgen(
             target,
             constraints,
             order=args.order,
-            block_bases=block_bases,
+            basis_overrides=basis_overrides,
         )
 
     payload = _serialize_result(result)
@@ -1472,7 +1604,10 @@ def _main(argv=None):
         required=True,
         help="global relaxation order r, enforcing deg(h_i * sigma_i) <= 2r in each block",
     )
-    putinar_parser.add_argument("--block-bases", help="per-block basis overrides, e.g. '3:4' to use degree-4 basis for block 3")
+    putinar_parser.add_argument(
+        "--basis-overrides",
+        help="per-block SOS degree caps, e.g. '0:2,3:0' to shrink blocks 0 and 3",
+    )
     putinar_parser.add_argument("--out")
 
     schmudgen_parser = subparsers.add_parser("schmudgen")
@@ -1485,7 +1620,10 @@ def _main(argv=None):
         required=True,
         help="global relaxation order r, enforcing deg(h_S * sigma_S) <= 2r in each block",
     )
-    schmudgen_parser.add_argument("--block-bases", help="per-block basis overrides, e.g. '3:4' to use degree-4 basis for block 3")
+    schmudgen_parser.add_argument(
+        "--basis-overrides",
+        help="per-block SOS degree caps, e.g. '0:2,7:0' to shrink selected blocks",
+    )
     schmudgen_parser.add_argument("--out")
 
     args = parser.parse_args(argv)

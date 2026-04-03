@@ -332,6 +332,40 @@ def test_schmudgen():
     assert res["exact_identity"] == sp.Poly(x * y, x, y)
     assert res["exact_residual"] == sp.Poly(0, x, y)
 
+def test_basis_overrides_diagnostics():
+    gs = [sp.Poly(x, x), sp.Poly(1 - x, x)]
+    failed = putinar(sp.Poly(x, x), gs, order=2)
+    assert failed["status"] == "optimal"
+    assert not failed["success"]
+    assert "basis_override_suggestion" in failed
+    assert failed["suggestion"] == (
+        f'try basis_overrides := "{",".join(f"{k}:{v}" for k, v in sorted(failed["basis_override_suggestion"]["overrides"].items()))}"'
+    )
+
+    rescued = putinar(
+        sp.Poly(x, x),
+        gs,
+        order=2,
+        basis_overrides=failed["basis_override_suggestion"]["overrides"],
+    )
+    assert rescued["success"]
+
+    with pytest.raises(ValueError, match="exceeds the basis allowed"):
+        putinar(sp.Poly(x, x), gs, order=1, basis_overrides={0: 4})
+
+    triangle = [sp.Poly(x, x, y), sp.Poly(y, x, y), sp.Poly(1 - x - y, x, y)]
+    failed_sch = schmudgen(sp.Poly(x * y, x, y), triangle, order=2)
+    assert failed_sch["status"] == "optimal"
+    assert not failed_sch["success"]
+    assert "basis_override_suggestion" in failed_sch
+    rescued_sch = schmudgen(
+        sp.Poly(x * y, x, y),
+        triangle,
+        order=2,
+        basis_overrides=failed_sch["basis_override_suggestion"]["overrides"],
+    )
+    assert rescued_sch["success"]
+
 def test_cli():
     script = Path(__file__).with_name("sos.py")
 
@@ -369,3 +403,41 @@ def test_cli():
     payload = json.loads(proc.stdout)
     assert payload["success"]
     assert payload["exact_identity"]["expr"] == "x"
+
+    # putinar failure with a heuristic basis override suggestion
+    proc = subprocess.run(
+        [sys.executable, str(script), "putinar", "--poly", "x", "--constraints", "x, 1 - x", "--vars", "x", "--order", "2"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(proc.stdout)
+    assert not payload["success"]
+    assert "basis_override_suggestion" in payload
+    override_text = ",".join(
+        f"{item['block']}:{item['degree']}" for item in payload["basis_override_suggestion"]["overrides"]
+    )
+    assert payload["suggestion"] == f'try basis_overrides := "{override_text}"'
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "putinar",
+            "--poly",
+            "x",
+            "--constraints",
+            "x, 1 - x",
+            "--vars",
+            "x",
+            "--order",
+            "2",
+            "--basis-overrides",
+            override_text,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(proc.stdout)
+    assert payload["success"]

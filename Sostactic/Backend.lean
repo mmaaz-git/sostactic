@@ -144,7 +144,7 @@ def parsePstvResult (text : String) : Except String PstvResult := do
   fromJson? json
 
 def runPstvBackend (command : String) (poly : String) (constraints : String)
-    (order : Nat) (blockBases : Option String := none) : CoreM PstvResult := do
+    (order : Nat) (basisOverrides : Option String := none) : CoreM PstvResult := do
   let python ← defaultPythonPath
   let script ← defaultScriptPath
   if !(← System.FilePath.pathExists script) then
@@ -160,8 +160,8 @@ def runPstvBackend (command : String) (poly : String) (constraints : String)
     "--order",
     toString order,
   ]
-  if let some bb := blockBases then
-    args := args ++ #["--block-bases", bb]
+  if let some bo := basisOverrides then
+    args := args ++ #["--basis-overrides", bo]
   let out ← IO.Process.output {
     cmd := python
     args := args

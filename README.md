@@ -138,7 +138,7 @@ You can also pass an explicit `denom_template` as a sympy expression with free p
 
 On failure, `result["diagnostics"]` contains rank info and `result["suggestion"]` has a hint for what to try next.
 
-### `putinar(target, constraints, order, block_bases=None)`
+### `putinar(target, constraints, order, basis_overrides=None)`
 
 Prove that `target >= 0` on the semialgebraic set `{x : g₁(x) >= 0, ..., gₘ(x) >= 0}` using Putinar's Positivstellensatz.
 
@@ -158,7 +158,7 @@ print(result["exact_certificate_blocks"])  # certificate blocks with multipliers
 The `order` is the global relaxation order `r`. Each block with multiplier `h` is truncated by
 `deg(h * sigma) <= 2r`, so `sigma` uses monomials of degree at most `floor((2r - deg(h)) / 2)`.
 
-### `schmudgen(target, constraints, order, block_bases=None)`
+### `schmudgen(target, constraints, order, basis_overrides=None)`
 
 Same interface as `putinar`, but uses Schmüdgen's Positivstellensatz, which uses products of all subsets of constraints as multipliers. More powerful than Putinar (works on any compact set), but the SDP grows exponentially in the number of constraints.
 
@@ -173,7 +173,7 @@ result = schmudgen(
 )
 ```
 
-### `putinar_empty(constraints, order, block_bases=None)`
+### `putinar_empty(constraints, order, basis_overrides=None)`
 
 Prove that `{x : g₁(x) >= 0, ..., gₘ(x) >= 0}` is empty. Equivalent to `putinar(-1, constraints, order=order)`.
 
@@ -185,7 +185,7 @@ result = putinar_empty(constraints=[x, -x - 1], order=1)
 print(result["success"])  # True — the set {x >= 0, x <= -1} is empty
 ```
 
-### `schmudgen_empty(constraints, order, block_bases=None)`
+### `schmudgen_empty(constraints, order, basis_overrides=None)`
 
 Same as `putinar_empty`, using Schmüdgen's Positivstellensatz.
 
@@ -195,7 +195,7 @@ All functions return a dict with at least:
 - `"success"`: whether an exact certificate was found
 - `"suggestion"`: on failure, a hint for what to try (e.g., increase degree, use a template)
 
-On success, the result also contains the exact certificate data (SOS terms, Gram matrices, certificate blocks). On failure, `"diagnostics"` or `"block_diagnostics"` contain per-block rank info useful for tuning `block_bases`.
+On success, the result also contains the exact certificate data (SOS terms, Gram matrices, certificate blocks). On failure, `"diagnostics"` or `"block_diagnostics"` contain per-block exactification diagnostics useful for tuning `basis_overrides`. The backend also returns a heuristic `basis_override_suggestion` and a top-level `"suggestion"` string you can paste into the CLI or Lean tactic. Suggestions are derived from the failed numeric solution itself; they do not trigger additional hidden SDP solves.
 
 ## Python CLI
 
@@ -251,7 +251,7 @@ python python/sos.py schmudgen --constraints "1-x**2-y**2, x**2+y**2-2" \
 | `--denom-degree-bound` | Denominator degree bound (for `sos_decomp`) |
 | `--denom-template` | Explicit denominator template (for `sos_decomp`) |
 | `--order` | Global relaxation order for `putinar`/`schmudgen` |
-| `--block-bases` | Per-block basis overrides, e.g. `"3:4,1:2"` |
+| `--basis-overrides` | Per-block SOS degree caps, e.g. `"0:2,3:0"` |
 | `--out` | Path to write JSON certificate |
 
 ### Output format
@@ -348,7 +348,7 @@ example (x y : ℝ) (h1 : x^2 + y^2 ≤ 1) (h2 : x^2 + y^2 ≥ 2) : False := by
 | `order := n` | Relaxation order for `putinar_decomp` / `schmudgen_decomp` / emptiness tactics |
 | `degree := n` | Degree bound for `sos_decomp` |
 | `denom_template := "..."` | Explicit denominator template (for `sos_decomp`) |
-| `block_bases := "1:2,2:3"` | Block structure hint for the SDP (block:degree pairs) |
+| `basis_overrides := "0:2,3:0"` | Per-block SOS degree caps used to shrink exactification search space |
 | `cert := "path.json"` | Load a pre-generated certificate from file |
 
 ### Certificate Import
@@ -434,13 +434,13 @@ example ... := by putinar_decomp (order := 3)
 example ... := by sos_decomp (degree := 2)
 ```
 
-**Use block bases.** When exactification fails due to rank-deficient Gram matrices, the solver suggests `block_bases` to constrain the SDP. Run once without them and check the suggestion in the error message:
+**Use basis overrides.** When exactification fails after the SDP is already feasible, the solver suggests `basis_overrides` to shrink selected SOS blocks. Run once without them, then rerun explicitly with the suggested override:
 
 ```lean
-example ... := by putinar_decomp (order := 3) (block_bases := "1:2,2:3")
+example ... := by putinar_decomp (order := 3) (basis_overrides := "1:2,2:3")
 ```
 
-The format is `"block:degree,block:degree,..."` where each pair restricts a specific block to a smaller monomial basis.
+The format is `"block:degree,block:degree,..."` where each pair restricts a specific block to a smaller SOS degree cap. For example, `0:2` means block 0 may only use monomials of degree at most 1.
 
 **Use a denominator template.** For `sos_decomp` with a denominator, you can guide the solver by specifying the form of the denominator with free parameters:
 

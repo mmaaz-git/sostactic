@@ -126,29 +126,11 @@ example : ¬∃ x y : ℝ, 0 ≤ 1 - x^2 - y^2 ∧ 0 ≤ 1 - (x - 3)^2 - (y - 3)
 Theorem.
 Every point in the heart (x^2+y^2-1)^3 - x^2*y^3 <= 0 lies in the disk of radius 2
 
-This is 'too hard' to prove immediately with a psatz certificate.
-So we split by cases, using the box {-2<=x<=2, -2<=y<=2}.
-This helps because this makes the set Archimedean, so can use Putinar.
+This is equivalent to showing that if the polynomial 4-x^2-y^2 >= 0
+over the semialgebraic set (x^2+y^2-1)^3 - x^2*y^3 <= 0, which we prove via Putinar.
 -/
-set_option maxHeartbeats 1600000 in
 example (x y : ℝ) (h1 : (x^2+y^2-1)^3 ≤ x^2*y^3) : x^2 + y^2 ≤ 4 := by
-  by_cases h3 : x^2 ≤ 4
-  · by_cases h4 : y^2 ≤ 4
-    · -- main case: box holds, use degree-4 certificate
-      -- translated to relaxation order 5
-      by_contra h2; push_neg at h2
-      have h2' : x^2 + y^2 ≥ 4 := by linarith
-      putinar_empty (order := 5)
-    · -- y^2 > 4: contradict heart curve with just {heart, y^2≥4}
-      push_neg at h4
-      have h4' : y^2 ≥ 4 := by linarith
-      exfalso
-      putinar_empty (order := 6) (block_bases := "1:2")
-  · -- x^2 > 4: contradict heart curve with just {heart, x^2≥4}
-    push_neg at h3
-    have h3' : x^2 ≥ 4 := by linarith
-    exfalso
-    putinar_empty (order := 6) (block_bases := "1:2")
+  putinar_decomp (order := 3)
 
 example (x y z : ℝ) :
   0 ≤ x^4 * y^2 + x^2 * y^4 + z^6 - 3 * x^2 * y^2 * z^2 := by

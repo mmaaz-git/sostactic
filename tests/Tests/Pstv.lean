@@ -11,6 +11,11 @@ example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ 1 - x) :
 example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ -x - 1) : False := by
   putinar_empty (order := 1)
 
+-- putinar_decomp: exactification rescue via basis_overrides
+example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ 1 - x) :
+    0 ≤ x := by
+  putinar_decomp (order := 2) (basis_overrides := "0:0")
+
 -- schmudgen_decomp: nonneg on [0, 1]
 example (x : ℝ) (h : 0 ≤ x) (h2 : 0 ≤ 1 - x) :
     0 ≤ x * (1 - x) := by
