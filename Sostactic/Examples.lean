@@ -100,27 +100,27 @@ example (x y : ℝ) : 2 * x * y ≤ x^2 + y^2 := by
 -- easy: x*(1-x) >= 0 on [0, 1]
 example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ 1 - x) :
     0 ≤ x * (1 - x) := by
-  schmudgen_decomp (degree := 0)
+  schmudgen_decomp (order := 1)
 
 -- easy: 4x^3 - 3x + 1 >= 0 on [0, 1] (touches 0 at x = 1/2)
 -- linarith, positivity, and nlinarith all fail
 example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ 1 - x) :
     0 ≤ 4 * x^3 - 3 * x + 1 := by
-  putinar_decomp (degree := 2)
+  putinar_decomp (order := 2)
 
 -- {x >= 0, x <= -1} is empty
 example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ -x - 1) : False := by
-  putinar_empty (degree := 0)
+  putinar_empty (order := 1)
 
 -- inside unit disk and outside sqrt(2)-disk is empty
 example (x y : ℝ) (h1 : 0 ≤ 1 - x^2 - y^2) (h2 : 0 ≤ x^2 + y^2 - 2) : False := by
-  schmudgen_empty (degree := 2)
+  schmudgen_empty (order := 1)
 
 -- two disjoint disks centered at (0,0) and (3,3)
 -- linarith and nlinarith fail
 example : ¬∃ x y : ℝ, 0 ≤ 1 - x^2 - y^2 ∧ 0 ≤ 1 - (x - 3)^2 - (y - 3)^2 := by
   rintro ⟨x, y, h1, h2⟩
-  schmudgen_empty (degree := 2)
+  schmudgen_empty (order := 1)
 
 /-
 Theorem.
@@ -135,17 +135,20 @@ example (x y : ℝ) (h1 : (x^2+y^2-1)^3 ≤ x^2*y^3) : x^2 + y^2 ≤ 4 := by
   by_cases h3 : x^2 ≤ 4
   · by_cases h4 : y^2 ≤ 4
     · -- main case: box holds, use degree-4 certificate
+      -- translated to relaxation order 5
       by_contra h2; push_neg at h2
       have h2' : x^2 + y^2 ≥ 4 := by linarith
-      putinar_empty (degree := 4)
+      putinar_empty (order := 5)
     · -- y^2 > 4: contradict heart curve with just {heart, y^2≥4}
       push_neg at h4
       have h4' : y^2 ≥ 4 := by linarith
-      putinar_empty (degree := 6) (block_bases := "1:2,2:2")
+      exfalso
+      putinar_empty (order := 6) (block_bases := "1:2")
   · -- x^2 > 4: contradict heart curve with just {heart, x^2≥4}
     push_neg at h3
     have h3' : x^2 ≥ 4 := by linarith
-    putinar_empty (degree := 6) (block_bases := "1:2")
+    exfalso
+    putinar_empty (order := 6) (block_bases := "1:2")
 
 example (x y z : ℝ) :
   0 ≤ x^4 * y^2 + x^2 * y^4 + z^6 - 3 * x^2 * y^2 * z^2 := by

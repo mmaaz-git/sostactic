@@ -27,13 +27,13 @@ example (x y z : ℝ) :
 -- linarith, positivity, and nlinarith all fail
 example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ 1 - x) :
     0 ≤ 4 * x^3 - 3 * x + 1 := by
-  putinar_decomp (degree := 2)
+  putinar_decomp (order := 2)
 
 -- two disjoint disks centered at (0,0) and (3,3)
 -- linarith and nlinarith fail
 example : ¬∃ x y : ℝ, 0 ≤ 1 - x^2 - y^2 ∧ 0 ≤ 1 - (x - 3)^2 - (y - 3)^2 := by
   rintro ⟨x, y, h1, h2⟩
-  schmudgen_empty (degree := 2)
+  schmudgen_empty (order := 1)
 ```
 
 Look at `Sostactic/Examples.lean` for more interesting examples!
@@ -138,7 +138,7 @@ You can also pass an explicit `denom_template` as a sympy expression with free p
 
 On failure, `result["diagnostics"]` contains rank info and `result["suggestion"]` has a hint for what to try next.
 
-### `putinar(target, constraints, degree_bound, block_bases=None)`
+### `putinar(target, constraints, order, block_bases=None)`
 
 Prove that `target >= 0` on the semialgebraic set `{x : g₁(x) >= 0, ..., gₘ(x) >= 0}` using Putinar's Positivstellensatz.
 
@@ -149,15 +149,16 @@ x = symbols('x')
 result = putinar(
     target=4*x**3 - 3*x + 1,
     constraints=[x, 1 - x],
-    degree_bound=2
+    order=2
 )
 print(result["success"])  # True
 print(result["exact_certificate_blocks"])  # certificate blocks with multipliers and SOS
 ```
 
-The `degree_bound` controls the maximum degree of the SOS multiplier polynomials (must be even).
+The `order` is the global relaxation order `r`. Each block with multiplier `h` is truncated by
+`deg(h * sigma) <= 2r`, so `sigma` uses monomials of degree at most `floor((2r - deg(h)) / 2)`.
 
-### `schmudgen(target, constraints, degree_bound, block_bases=None)`
+### `schmudgen(target, constraints, order, block_bases=None)`
 
 Same interface as `putinar`, but uses Schmüdgen's Positivstellensatz, which uses products of all subsets of constraints as multipliers. More powerful than Putinar (works on any compact set), but the SDP grows exponentially in the number of constraints.
 
@@ -168,23 +169,23 @@ x = symbols('x')
 result = schmudgen(
     target=x*(1 - x),
     constraints=[x, 1 - x],
-    degree_bound=0
+    order=1
 )
 ```
 
-### `putinar_empty(constraints, degree_bound, block_bases=None)`
+### `putinar_empty(constraints, order, block_bases=None)`
 
-Prove that `{x : g₁(x) >= 0, ..., gₘ(x) >= 0}` is empty. Equivalent to `putinar(-1, constraints, degree_bound)`.
+Prove that `{x : g₁(x) >= 0, ..., gₘ(x) >= 0}` is empty. Equivalent to `putinar(-1, constraints, order=order)`.
 
 ```python
 from python.sos import putinar_empty
 
 x = symbols('x')
-result = putinar_empty(constraints=[x, -x - 1], degree_bound=0)
+result = putinar_empty(constraints=[x, -x - 1], order=1)
 print(result["success"])  # True — the set {x >= 0, x <= -1} is empty
 ```
 
-### `schmudgen_empty(constraints, degree_bound, block_bases=None)`
+### `schmudgen_empty(constraints, order, block_bases=None)`
 
 Same as `putinar_empty`, using Schmüdgen's Positivstellensatz.
 
@@ -222,10 +223,10 @@ python python/sos.py sos_decomp --poly "x**2 + y**2" --vars "x y" --out cert.jso
 ```bash
 # prove 4x^3 - 3x + 1 >= 0 on [0, 1]
 python python/sos.py putinar --poly "4*x**3 - 3*x + 1" --constraints "x, 1-x" \
-    --vars "x" --degree-bound 2
+    --vars "x" --order 2
 
 # prove emptiness (--poly defaults to -1)
-python python/sos.py putinar --constraints "x, -x-1" --vars "x" --degree-bound 0
+python python/sos.py putinar --constraints "x, -x-1" --vars "x" --order 1
 ```
 
 ### `schmudgen`
@@ -233,11 +234,11 @@ python python/sos.py putinar --constraints "x, -x-1" --vars "x" --degree-bound 0
 ```bash
 # prove x(1-x) >= 0 on [0, 1]
 python python/sos.py schmudgen --poly "x*(1-x)" --constraints "x, 1-x" \
-    --vars "x" --degree-bound 0
+    --vars "x" --order 1
 
 # prove emptiness
 python python/sos.py schmudgen --constraints "1-x**2-y**2, x**2+y**2-2" \
-    --vars "x y" --degree-bound 2
+    --vars "x y" --order 1
 ```
 
 ### CLI arguments
@@ -249,7 +250,7 @@ python python/sos.py schmudgen --constraints "1-x**2-y**2, x**2+y**2-2" \
 | `--vars` | Space-separated list of variable names |
 | `--denom-degree-bound` | Denominator degree bound (for `sos_decomp`) |
 | `--denom-template` | Explicit denominator template (for `sos_decomp`) |
-| `--degree-bound` | SOS multiplier degree bound (for `putinar`/`schmudgen`) |
+| `--order` | Global relaxation order for `putinar`/`schmudgen` |
 | `--block-bases` | Per-block basis overrides, e.g. `"3:4,1:2"` |
 | `--out` | Path to write JSON certificate |
 
@@ -318,12 +319,12 @@ Proves `0 ≤ f` given polynomial inequality hypotheses, using Putinar's or Schm
 -- Putinar: requires Archimedean (compact) constraints
 example (x : ℝ) (h1 : 0 ≤ x) (h2 : x ≤ 1) :
     0 ≤ 4 * x^3 - 3 * x + 1 := by
-  putinar_decomp (degree := 2)
+  putinar_decomp (order := 2)
 
 -- Schmüdgen: requires compact constraints, uses products of gᵢ
 example (x : ℝ) (h1 : 0 ≤ x) (h2 : x ≤ 1) :
     0 ≤ x * (1 - x) := by
-  schmudgen_decomp (degree := 0)
+  schmudgen_decomp (order := 1)
 ```
 
 ### `putinar_empty` / `schmudgen_empty` — Emptiness of semialgebraic sets
@@ -333,18 +334,19 @@ Proves `False` from contradictory polynomial inequality hypotheses, showing the 
 ```lean
 -- {x ≥ 0, x ≤ -1} is empty
 example (x : ℝ) (h1 : 0 ≤ x) (h2 : x ≤ -1) : False := by
-  putinar_empty (degree := 0)
+  putinar_empty (order := 1)
 
 -- disjoint disks
 example (x y : ℝ) (h1 : x^2 + y^2 ≤ 1) (h2 : x^2 + y^2 ≥ 2) : False := by
-  schmudgen_empty (degree := 2)
+  schmudgen_empty (order := 1)
 ```
 
 ### Common parameters
 
 | Parameter | Description |
 |-----------|-------------|
-| `degree := n` | Degree bound for the SOS multipliers / denominator |
+| `order := n` | Relaxation order for `putinar_decomp` / `schmudgen_decomp` / emptiness tactics |
+| `degree := n` | Degree bound for `sos_decomp` |
 | `denom_template := "..."` | Explicit denominator template (for `sos_decomp`) |
 | `block_bases := "1:2,2:3"` | Block structure hint for the SDP (block:degree pairs) |
 | `cert := "path.json"` | Load a pre-generated certificate from file |
@@ -393,7 +395,7 @@ python python/sos.py sos_decomp \
 
 # or for Positivstellensatz certificates
 python python/sos.py putinar --poly "4*x**3 - 3*x + 1" \
-    --constraints "x, 1-x" --vars "x" --degree-bound 2 --out certs/chebyshev.json
+    --constraints "x, 1-x" --vars "x" --order 2 --out certs/chebyshev.json
 ```
 
 Then in Lean:
@@ -414,13 +416,13 @@ Lean still independently verifies the certificate — the JSON file is untrusted
 
 The SDP solver finds a numerical solution, which then needs to be converted to exact rationals. This "exactification" step can fail for several reasons. When it does, the solver returns diagnostics and suggestions.
 
-**Increase the degree bound.** If the solver returns infeasible, the degree bound may be too low. Try increasing it:
+**Increase the relaxation order.** If the solver returns infeasible, the truncation may be too small. Try increasing the order:
 
 ```lean
--- degree 0 might not be enough
-example ... := by putinar_decomp (degree := 2)
--- try degree 4
-example ... := by putinar_decomp (degree := 4)
+-- order 1 might not be enough
+example ... := by putinar_decomp (order := 2)
+-- try order 3
+example ... := by putinar_decomp (order := 3)
 ```
 
 **Use a denominator.** For `sos_decomp`, if the polynomial is nonneg but not SOS (like Motzkin's), you need a denominator:
@@ -435,7 +437,7 @@ example ... := by sos_decomp (degree := 2)
 **Use block bases.** When exactification fails due to rank-deficient Gram matrices, the solver suggests `block_bases` to constrain the SDP. Run once without them and check the suggestion in the error message:
 
 ```lean
-example ... := by putinar_decomp (degree := 4) (block_bases := "1:2,2:3")
+example ... := by putinar_decomp (order := 3) (block_bases := "1:2,2:3")
 ```
 
 The format is `"block:degree,block:degree,..."` where each pair restricts a specific block to a smaller monomial basis.
@@ -452,9 +454,9 @@ example (x y z : ℝ) :
 
 ```lean
 -- putinar might fail here
--- example ... := by putinar_decomp (degree := 2)
+-- example ... := by putinar_decomp (order := 2)
 -- schmudgen uses product multipliers
-example ... := by schmudgen_decomp (degree := 2)
+example ... := by schmudgen_decomp (order := 2)
 ```
 
 **Pre-generate the certificate.** If the solver is too slow to run interactively, generate the certificate with the Python CLI and load it in Lean (see [Pre-generating certificates](#pre-generating-certificates-for-large-problems) above).

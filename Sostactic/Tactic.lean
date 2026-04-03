@@ -368,7 +368,7 @@ def pstvCertRhs (constraintExprs : Array String)
   | [] => "(0 : ℝ)"
   | xs => " + ".intercalate xs
 
-def runPstvDecomp (command : String) (degreeBound : Nat)
+def runPstvDecomp (command : String) (order : Nat)
     (blockBases : Option String := none)
     (certFile : Option String := none) : TacticM Unit := do
   let goalTarget ← normalizeNonnegGoal
@@ -379,7 +379,7 @@ def runPstvDecomp (command : String) (degreeBound : Nat)
     | some path => (loadPstvResult path : MetaM PstvResult)
     | none =>
       let constraintStrs := ", ".intercalate constraints.toList
-      (runPstvBackend command goalTarget constraintStrs degreeBound blockBases : MetaM PstvResult)
+      (runPstvBackend command goalTarget constraintStrs order blockBases : MetaM PstvResult)
   if !result.success then
     match result.suggestion with
     | some s => throwError "{command} backend failed to find a certificate.\n\nHint: {s}"
@@ -390,7 +390,7 @@ def runPstvDecomp (command : String) (degreeBound : Nat)
   tryEvalTacticString "case pstv_identity => ring_nf"
   tryEvalTacticString "case pstv_nonneg => positivity"
 
-def runPstvEmpty (command : String) (degreeBound : Nat)
+def runPstvEmpty (command : String) (order : Nat)
     (blockBases : Option String := none)
     (certFile : Option String := none) : TacticM Unit := do
   let constraints ← extractNonnegConstraints
@@ -400,7 +400,7 @@ def runPstvEmpty (command : String) (degreeBound : Nat)
     | some path => (loadPstvResult path : MetaM PstvResult)
     | none =>
       let constraintStrs := ", ".intercalate constraints.toList
-      (runPstvBackend command "-1" constraintStrs degreeBound blockBases : MetaM PstvResult)
+      (runPstvBackend command "-1" constraintStrs order blockBases : MetaM PstvResult)
   if !result.success then
     match result.suggestion with
     | some s => throwError "{command} backend failed to find an emptiness certificate.\n\nHint: {s}"
@@ -411,23 +411,23 @@ def runPstvEmpty (command : String) (degreeBound : Nat)
   tryEvalTacticString "case pstv_identity => ring_nf"
   tryEvalTacticString "case pstv_nonneg => positivity"
 
-syntax (name := putinarDecompTac) "putinar_decomp" "(" "degree" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
-syntax (name := schmudgenDecompTac) "schmudgen_decomp" "(" "degree" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
-syntax (name := putinarEmptyTac) "putinar_empty" "(" "degree" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
-syntax (name := schmudgenEmptyTac) "schmudgen_empty" "(" "degree" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
+syntax (name := putinarDecompTac) "putinar_decomp" "(" "order" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
+syntax (name := schmudgenDecompTac) "schmudgen_decomp" "(" "order" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
+syntax (name := putinarEmptyTac) "putinar_empty" "(" "order" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
+syntax (name := schmudgenEmptyTac) "schmudgen_empty" "(" "order" ":=" num ")" ("(" "block_bases" ":=" str ")")? : tactic
 syntax (name := putinarDecompCertTac) "putinar_decomp" "(" "cert" ":=" str ")" : tactic
 syntax (name := schmudgenDecompCertTac) "schmudgen_decomp" "(" "cert" ":=" str ")" : tactic
 syntax (name := putinarEmptyCertTac) "putinar_empty" "(" "cert" ":=" str ")" : tactic
 syntax (name := schmudgenEmptyCertTac) "schmudgen_empty" "(" "cert" ":=" str ")" : tactic
 
 elab_rules : tactic
-  | `(tactic| putinar_decomp (degree := $d:num) $[( block_bases := $bb:str )]?) =>
+  | `(tactic| putinar_decomp (order := $d:num) $[( block_bases := $bb:str )]?) =>
     Lean.Elab.Tactic.focus do runPstvDecomp "putinar" d.getNat (bb.map (·.getString))
-  | `(tactic| schmudgen_decomp (degree := $d:num) $[( block_bases := $bb:str )]?) =>
+  | `(tactic| schmudgen_decomp (order := $d:num) $[( block_bases := $bb:str )]?) =>
     Lean.Elab.Tactic.focus do runPstvDecomp "schmudgen" d.getNat (bb.map (·.getString))
-  | `(tactic| putinar_empty (degree := $d:num) $[( block_bases := $bb:str )]?) =>
+  | `(tactic| putinar_empty (order := $d:num) $[( block_bases := $bb:str )]?) =>
     Lean.Elab.Tactic.focus do runPstvEmpty "putinar" d.getNat (bb.map (·.getString))
-  | `(tactic| schmudgen_empty (degree := $d:num) $[( block_bases := $bb:str )]?) =>
+  | `(tactic| schmudgen_empty (order := $d:num) $[( block_bases := $bb:str )]?) =>
     Lean.Elab.Tactic.focus do runPstvEmpty "schmudgen" d.getNat (bb.map (·.getString))
   | `(tactic| putinar_decomp (cert := $c:str)) =>
     Lean.Elab.Tactic.focus do runPstvDecomp "putinar" 0 (certFile := some c.getString)

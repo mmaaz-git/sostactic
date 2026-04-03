@@ -251,7 +251,7 @@ def test_putinar():
     # x >= 0 and x <= -1
     gs = [sp.Poly(x, x), sp.Poly(-x - 1, x)]
 
-    res = putinar_empty(gs, degree_bound=0)
+    res = putinar_empty(gs, order=1)
     assert res["success"]
     assert res["exact_identity"] == sp.Poly(-1, x)
     assert res["exact_residual"] == sp.Poly(0, x)
@@ -260,7 +260,7 @@ def test_putinar():
     # inside the unit disk and outside the sqrt(2)-disk
     gs = [sp.Poly(1 - x**2 - y**2, x, y), sp.Poly(x**2 + y**2 - 2, x, y)]
 
-    res = putinar_empty(gs, degree_bound=2)
+    res = putinar_empty(gs, order=1)
     assert res["success"]
     assert res["exact_identity"] == sp.Poly(-1, x, y)
     assert res["exact_residual"] == sp.Poly(0, x, y)
@@ -268,7 +268,7 @@ def test_putinar():
     # x >= 0 on [0, 1]
     gs = [sp.Poly(x, x), sp.Poly(1 - x, x)]
 
-    res = putinar(sp.Poly(x, x), gs, degree_bound=0)
+    res = putinar(sp.Poly(x, x), gs, order=1)
     assert res["success"]
     assert res["exact_identity"] == sp.Poly(x, x)
     assert res["exact_residual"] == sp.Poly(0, x)
@@ -276,12 +276,12 @@ def test_putinar():
     # x*y >= 0 on the triangle {x >= 0, y >= 0, 1-x-y >= 0}
     # The triangle is compact so the quadratic module is Archimedean — Putinar's
     # theorem guarantees a certificate exists. However, it requires impractically
-    # high degree sigma_i, so the solver fails up to degree_bound=4. Schmudgen
-    # finds it at degree_bound=0 (see test_schmudgen) because it has the
+    # high relaxation order, so the solver still fails at order=3. Schmudgen
+    # finds it at order=1 (see test_schmudgen) because it has the
     # cross-term multiplier x*y built in.
     gs = [sp.Poly(x, x, y), sp.Poly(y, x, y), sp.Poly(1 - x - y, x, y)]
 
-    res = putinar(sp.Poly(x * y, x, y), gs, degree_bound=4)
+    res = putinar(sp.Poly(x * y, x, y), gs, order=3)
     assert not res["success"]
 
     # Scheiderer's Example 2.3.6: K = {x >= 1/2, y >= 1/2, xy <= 1} is compact,
@@ -290,7 +290,7 @@ def test_putinar():
     # Putinar's theorem does not apply here.
     gs = [sp.Poly(2*x - 1, x, y), sp.Poly(2*y - 1, x, y), sp.Poly(1 - x*y, x, y)]
 
-    res = putinar(sp.Poly(5 - x**2 - y**2, x, y), gs, degree_bound=4)
+    res = putinar(sp.Poly(5 - x**2 - y**2, x, y), gs, order=3)
     assert not res["success"]
 
 
@@ -298,7 +298,7 @@ def test_schmudgen():
     # x >= 0 and x <= -1
     gs = [sp.Poly(x, x), sp.Poly(-x - 1, x)]
 
-    res = schmudgen_empty(gs, degree_bound=0)
+    res = schmudgen_empty(gs, order=1)
     assert res["success"]
     assert res["exact_identity"] == sp.Poly(-1, x)
     assert res["exact_residual"] == sp.Poly(0, x)
@@ -307,7 +307,7 @@ def test_schmudgen():
     # inside the unit disk and outside the sqrt(2)-disk
     gs = [sp.Poly(1 - x**2 - y**2, x, y), sp.Poly(x**2 + y**2 - 2, x, y)]
 
-    res = schmudgen_empty(gs, degree_bound=2)
+    res = schmudgen_empty(gs, order=1)
     assert res["success"]
     assert res["exact_identity"] == sp.Poly(-1, x, y)
     assert res["exact_residual"] == sp.Poly(0, x, y)
@@ -315,23 +315,22 @@ def test_schmudgen():
     # x * (1 - x) >= 0 on [0, 1]
     gs = [sp.Poly(x, x), sp.Poly(1 - x, x)]
 
-    res = schmudgen(sp.Poly(x * (1 - x), x), gs, degree_bound=0)
+    res = schmudgen(sp.Poly(x * (1 - x), x), gs, order=1)
     assert res["success"]
     assert res["exact_identity"] == sp.Poly(x - x**2, x)
     assert res["exact_residual"] == sp.Poly(0, x)
 
     # x*y >= 0 on the triangle {x >= 0, y >= 0, 1-x-y >= 0}
     # The certificate is x*y = (x*y) * 1, using the cross-term multiplier g1*g2.
-    # Putinar fails on this at practical degree bounds (see test_putinar) — a
+    # Putinar fails on this at practical orders (see test_putinar) — a
     # Putinar certificate exists (the set is Archimedean) but requires very high
-    # degree. Schmudgen finds it immediately because it has product multipliers.
+    # order. Schmudgen finds it immediately because it has product multipliers.
     gs = [sp.Poly(x, x, y), sp.Poly(y, x, y), sp.Poly(1 - x - y, x, y)]
 
-    res = schmudgen(sp.Poly(x * y, x, y), gs, degree_bound=0)
+    res = schmudgen(sp.Poly(x * y, x, y), gs, order=1)
     assert res["success"]
     assert res["exact_identity"] == sp.Poly(x * y, x, y)
     assert res["exact_residual"] == sp.Poly(0, x, y)
-
 
 def test_cli():
     script = Path(__file__).with_name("sos.py")
@@ -350,7 +349,7 @@ def test_cli():
 
     # putinar
     proc = subprocess.run(
-        [sys.executable, str(script), "putinar", "--constraints", "x, -x-1", "--vars", "x", "--degree-bound", "0"],
+        [sys.executable, str(script), "putinar", "--constraints", "x, -x-1", "--vars", "x", "--order", "1"],
         check=True,
         capture_output=True,
         text=True,
@@ -362,7 +361,7 @@ def test_cli():
 
     # putinar with a target polynomial
     proc = subprocess.run(
-        [sys.executable, str(script), "putinar", "--poly", "x", "--constraints", "x, 1 - x", "--vars", "x", "--degree-bound", "0"],
+        [sys.executable, str(script), "putinar", "--poly", "x", "--constraints", "x, 1 - x", "--vars", "x", "--order", "1"],
         check=True,
         capture_output=True,
         text=True,

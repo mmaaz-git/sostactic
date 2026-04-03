@@ -93,6 +93,14 @@ def monomial_basis_with_degree_bound(nvars: int, degree_bound: int):
     """
     return list(tuples_sum_leq(nvars, degree_bound // 2))
 
+def monomial_basis_up_to_degree(nvars: int, max_degree: int):
+    """
+    Return all monomials with total degree at most max_degree.
+    """
+    if max_degree < 0:
+        return []
+    return list(tuples_sum_leq(nvars, max_degree))
+
 def _upper_indices(size: int):
     """
     Return the upper-triangular indices of a square matrix.
@@ -148,6 +156,31 @@ def _common_gens(polys):
         expr = poly.as_expr() if isinstance(poly, sp.Poly) else sp.expand(poly)
         symbols |= expr.free_symbols
     return tuple(sorted(symbols, key=sp.default_sort_key))
+
+def _poly_total_degree(poly: sp.Poly) -> int:
+    """
+    Return the total degree of a polynomial, treating 0 as degree 0.
+    """
+    return max((sum(mon) for mon in poly.monoms()), default=0)
+
+def _block_basis_from_order(nvars: int, order: int, multiplier: sp.Poly):
+    """
+    Return the SOS monomial basis allowed by relaxation order ``order``.
+
+    For multiplier h, we require deg(h * sigma) <= 2 * order, so
+    deg(sigma) <= 2 * order - deg(h). Since sigma is SOS, the basis
+    monomials have degree at most floor((2 * order - deg(h)) / 2).
+    """
+    max_sigma_degree = 2 * order - _poly_total_degree(multiplier)
+    return monomial_basis_up_to_degree(nvars, max_sigma_degree // 2)
+
+def _resolve_pstv_order(order: int):
+    """
+    Validate the Positivstellensatz relaxation order.
+    """
+    if order < 0:
+        raise ValueError("order must be a nonnegative integer")
+    return order
 
 def _block_coeffs(q_block, rows_by_mon: dict):
     """
@@ -1001,16 +1034,34 @@ def sos_decomp(p: sp.Poly, denom_degree_bound: int = 0, denom_template=None):
 def _block_diagnostics(result: dict):
     """Per-block size/rank/eigenvalue diagnostics for failed exactification."""
     diags = []
+    blocks = result.get("blocks", [])
     for i, Q in enumerate(result.get("block_grams", [])):
         if Q is None or Q.ndim < 2:
             continue
-        evals = np.linalg.eigvalsh(Q)
-        diags.append({
-            "block": i,
+        evals, evecs = np.linalg.eigh(Q)
+        rank = int(np.sum(evals > 1e-6))
+        diag = {
+            "block": blocks[i].get("source_block_index", i) if i < len(blocks) else i,
             "size": Q.shape[0],
-            "numeric_rank": int(np.sum(evals > 1e-6)),
+            "numeric_rank": rank,
             "min_eigenvalue": float(evals[0]),
-        })
+        }
+        # Compute eigenvalue-weighted monomial contributions to find active degree
+        if i < len(blocks) and "basis" in blocks[i]:
+            basis = blocks[i]["basis"]
+            current_max_deg = max(sum(m) for m in basis)
+            diag["current_degree_bound"] = 2 * current_max_deg
+            contrib = np.zeros(len(basis))
+            for j in range(len(evals)):
+                if evals[j] > 0:
+                    contrib += evals[j] * evecs[:, j] ** 2
+            total = np.sum(contrib)
+            if total > 0:
+                active = contrib / total > 1e-3
+                if np.any(active):
+                    max_deg = max(sum(basis[j]) for j in range(len(basis)) if active[j])
+                    diag["suggested_degree_bound"] = 2 * max_deg
+        diags.append(diag)
     return diags
 
 def _normalize_positivstellensatz_input(constraints, target):
@@ -1021,7 +1072,12 @@ def _normalize_positivstellensatz_input(constraints, target):
     gens = _common_gens([target] + constraints)
     return _poly(target, gens), [_poly(g, gens) for g in constraints]
 
-def putinar(target, constraints, degree_bound: int, block_bases: dict[int, list] | None = None):
+def putinar(
+    target,
+    constraints,
+    order: int,
+    block_bases: dict[int, list] | None = None,
+):
     """
     Prove that target >= 0 on the semialgebraic set {x : g_1(x) >= 0, ..., g_m(x) >= 0}
     using Putinar's Positivstellensatz.
@@ -1034,9 +1090,10 @@ def putinar(target, constraints, degree_bound: int, block_bases: dict[int, list]
     Args:
         target: polynomial to prove nonneg (sympy expression or Poly).
         constraints: list of g_i polynomials defining the feasible set.
-        degree_bound: maximum (even) degree of each SOS multiplier sigma_i.
-            Each sigma_i is a sum of squares of polynomials whose monomials
-            have degree up to degree_bound // 2.
+        order: global relaxation order r. Each block with multiplier h uses the
+            truncation deg(h * sigma) <= 2r, so sigma is built from monomials
+            of degree at most floor((2r - deg(h)) / 2). This is the standard
+            truncated Putinar hierarchy.
         block_bases: optional dict mapping block index to a monomial basis list,
             overriding the default full-degree basis for that block. Useful when
             exactification fails due to rank-deficient Gram matrices: run once
@@ -1046,39 +1103,50 @@ def putinar(target, constraints, degree_bound: int, block_bases: dict[int, list]
             (e.g. ``{3: monomial_basis_with_degree_bound(n, 4)}`` to give
             block 3 a degree-4 basis instead of the default).
     """
-    if degree_bound < 0 or degree_bound % 2 != 0:
-        raise ValueError("degree_bound must be a nonnegative even integer")
     target, constraints = _normalize_positivstellensatz_input(constraints, target)
     gens = target.gens
-    default_basis = monomial_basis_with_degree_bound(len(gens), degree_bound)
     multipliers = [_poly(1, gens)] + constraints
+    order = _resolve_pstv_order(order)
     blocks = []
     for i, h in enumerate(multipliers):
-        basis = block_bases[i] if block_bases and i in block_bases else default_basis
+        basis = block_bases[i] if block_bases and i in block_bases else _block_basis_from_order(len(gens), order, h)
+        if not basis:
+            continue
         blocks.append({
             "name": f"sigma_{i}",
             "multiplier": h,
             "multiplier_factors": [] if i == 0 else [h],
             "multiplier_factor_indices": [] if i == 0 else [i - 1],
             "basis": basis,
+            "source_block_index": i,
         })
     compiled = _compile_certificate_affine_system(target, blocks)
     compiled["kind"] = "putinar"
     result = exactify_certificate_solution(numeric_certificate_solution(compiled))
+    result["order"] = order
     if not result["success"]:
         result["block_diagnostics"] = _block_diagnostics(result)
     return result
 
-def putinar_empty(constraints, degree_bound: int, block_bases: dict[int, list] | None = None):
+def putinar_empty(
+    constraints,
+    order: int,
+    block_bases: dict[int, list] | None = None,
+):
     """
     Prove that {x : g_1(x) >= 0, ..., g_m(x) >= 0} is empty using Putinar's
-    Positivstellensatz. Equivalent to putinar(-1, constraints, degree_bound).
+    Positivstellensatz. Equivalent to putinar(-1, constraints, order=order).
 
     See :func:`putinar` for the meaning of ``block_bases``.
     """
-    return putinar(-1, constraints, degree_bound, block_bases=block_bases)
+    return putinar(-1, constraints, order, block_bases=block_bases)
 
-def schmudgen(target, constraints, degree_bound: int, block_bases: dict[int, list] | None = None):
+def schmudgen(
+    target,
+    constraints,
+    order: int,
+    block_bases: dict[int, list] | None = None,
+):
     """
     Prove that target >= 0 on the semialgebraic set {x : g_1(x) >= 0, ..., g_m(x) >= 0}
     using Schmudgen's Positivstellensatz.
@@ -1098,9 +1166,10 @@ def schmudgen(target, constraints, degree_bound: int, block_bases: dict[int, lis
     Args:
         target: polynomial to prove nonneg (sympy expression or Poly).
         constraints: list of g_i polynomials defining the feasible set.
-        degree_bound: maximum (even) degree of each SOS multiplier sigma_S.
-            Each sigma_S is a sum of squares of polynomials whose monomials
-            have degree up to degree_bound // 2.
+        order: global relaxation order r. Each block with multiplier h uses the
+            truncation deg(h * sigma) <= 2r, so sigma is built from monomials
+            of degree at most floor((2r - deg(h)) / 2). This is the standard
+            truncated Schmudgen hierarchy.
         block_bases: optional dict mapping block index to a monomial basis list,
             overriding the default full-degree basis for that block. Useful when
             exactification fails due to rank-deficient Gram matrices: run once
@@ -1110,11 +1179,8 @@ def schmudgen(target, constraints, degree_bound: int, block_bases: dict[int, lis
             (e.g. ``{3: monomial_basis_with_degree_bound(n, 4)}`` to give
             block 3 a degree-4 basis instead of the default).
     """
-    if degree_bound < 0 or degree_bound % 2 != 0:
-        raise ValueError("degree_bound must be a nonnegative even integer")
     target, gs = _normalize_positivstellensatz_input(constraints, target)
     gens = target.gens
-    default_basis = monomial_basis_with_degree_bound(len(gens), degree_bound)
     multipliers = [_poly(1, gens)]
     multiplier_factors = [[]]
     multiplier_factor_indices = [[]]
@@ -1127,31 +1193,40 @@ def schmudgen(target, constraints, degree_bound: int, block_bases: dict[int, lis
             multipliers.append(_poly(expr, gens))
             multiplier_factors.append(list(subset))
             multiplier_factor_indices.append(list(indices))
+    order = _resolve_pstv_order(order)
     blocks = []
     for i, h in enumerate(multipliers):
-        basis = block_bases[i] if block_bases and i in block_bases else default_basis
+        basis = block_bases[i] if block_bases and i in block_bases else _block_basis_from_order(len(gens), order, h)
+        if not basis:
+            continue
         blocks.append({
             "name": f"sigma_{i}",
             "multiplier": h,
             "multiplier_factors": multiplier_factors[i],
             "multiplier_factor_indices": multiplier_factor_indices[i],
             "basis": basis,
+            "source_block_index": i,
         })
     compiled = _compile_certificate_affine_system(target, blocks)
     compiled["kind"] = "schmudgen"
     result = exactify_certificate_solution(numeric_certificate_solution(compiled))
+    result["order"] = order
     if not result["success"]:
         result["block_diagnostics"] = _block_diagnostics(result)
     return result
 
-def schmudgen_empty(constraints, degree_bound: int, block_bases: dict[int, list] | None = None):
+def schmudgen_empty(
+    constraints,
+    order: int,
+    block_bases: dict[int, list] | None = None,
+):
     """
     Prove that {x : g_1(x) >= 0, ..., g_m(x) >= 0} is empty using Schmudgen's
-    Positivstellensatz. Equivalent to schmudgen(-1, constraints, degree_bound).
+    Positivstellensatz. Equivalent to schmudgen(-1, constraints, order=order).
 
     See :func:`schmudgen` for the meaning of ``block_bases``.
     """
-    return schmudgen(-1, constraints, degree_bound, block_bases=block_bases)
+    return schmudgen(-1, constraints, order, block_bases=block_bases)
 
 # CLI
 
@@ -1284,20 +1359,15 @@ def _serialize_result(result: dict):
         if "diagnostics" in result:
             suggestion = result["diagnostics"].get("suggestion")
         elif "block_diagnostics" in result:
-            deficient = [
+            reducible = [
                 b for b in result["block_diagnostics"]
-                if b["numeric_rank"] < b["size"]
+                if "suggested_degree_bound" in b
+                and b["suggested_degree_bound"] < b.get("current_degree_bound", float("inf"))
             ]
-            if deficient:
-                n_vars = len(result.get("gens", []))
+            if reducible:
                 bb_parts = []
-                for b in deficient:
-                    # find smallest degree d such that C(n+d,d) >= numeric_rank
-                    from math import comb
-                    d = 0
-                    while comb(n_vars + d, d) < b["numeric_rank"]:
-                        d += 1
-                    bb_parts.append(f"{b['block']}:{d}")
+                for b in reducible:
+                    bb_parts.append(f"{b['block']}:{b['suggested_degree_bound']}")
                 bb_str = ",".join(bb_parts)
                 suggestion = f'try block_bases := "{bb_str}"'
         if suggestion:
@@ -1347,7 +1417,12 @@ def _run_cli(args):
         block_bases = _parse_block_bases(getattr(args, 'block_bases', None), len(gens))
         target = _poly(target, gens)
         constraints = [_poly(g, gens) for g in constraints]
-        result = putinar(target, constraints, degree_bound=args.degree_bound, block_bases=block_bases)
+        result = putinar(
+            target,
+            constraints,
+            order=args.order,
+            block_bases=block_bases,
+        )
     else:
         target = sp.sympify(args.poly)
         constraints = _parse_expr_list(args.constraints)
@@ -1357,7 +1432,12 @@ def _run_cli(args):
         block_bases = _parse_block_bases(getattr(args, 'block_bases', None), len(gens))
         target = _poly(target, gens)
         constraints = [_poly(g, gens) for g in constraints]
-        result = schmudgen(target, constraints, degree_bound=args.degree_bound, block_bases=block_bases)
+        result = schmudgen(
+            target,
+            constraints,
+            order=args.order,
+            block_bases=block_bases,
+        )
 
     payload = _serialize_result(result)
     text = json.dumps(payload, indent=2, sort_keys=True)
@@ -1386,7 +1466,12 @@ def _main(argv=None):
     putinar_parser.add_argument("--poly", default="-1")
     putinar_parser.add_argument("--constraints", required=True)
     putinar_parser.add_argument("--vars")
-    putinar_parser.add_argument("--degree-bound", type=int, required=True)
+    putinar_parser.add_argument(
+        "--order",
+        type=int,
+        required=True,
+        help="global relaxation order r, enforcing deg(h_i * sigma_i) <= 2r in each block",
+    )
     putinar_parser.add_argument("--block-bases", help="per-block basis overrides, e.g. '3:4' to use degree-4 basis for block 3")
     putinar_parser.add_argument("--out")
 
@@ -1394,7 +1479,12 @@ def _main(argv=None):
     schmudgen_parser.add_argument("--poly", default="-1")
     schmudgen_parser.add_argument("--constraints", required=True)
     schmudgen_parser.add_argument("--vars")
-    schmudgen_parser.add_argument("--degree-bound", type=int, required=True)
+    schmudgen_parser.add_argument(
+        "--order",
+        type=int,
+        required=True,
+        help="global relaxation order r, enforcing deg(h_S * sigma_S) <= 2r in each block",
+    )
     schmudgen_parser.add_argument("--block-bases", help="per-block basis overrides, e.g. '3:4' to use degree-4 basis for block 3")
     schmudgen_parser.add_argument("--out")
 
