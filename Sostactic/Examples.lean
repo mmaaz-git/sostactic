@@ -108,6 +108,12 @@ example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ 1 - x) :
     0 ≤ 4 * x^3 - 3 * x + 1 := by
   putinar_decomp (order := 2)
 
+-- exactification rescue: first run suggests a smaller basis for selected blocks
+example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ 1 - x) :
+    0 ≤ x := by
+  -- putinar_decomp (order := 2)
+  putinar_decomp (order := 2) (basis_overrides := "0:0,2:0")
+
 -- {x >= 0, x <= -1} is empty
 example (x : ℝ) (h1 : 0 ≤ x) (h2 : 0 ≤ -x - 1) : False := by
   putinar_empty (order := 1)
