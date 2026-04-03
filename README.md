@@ -412,9 +412,9 @@ example (x : ℝ) (h1 : 0 ≤ x) (h2 : x ≤ 1) :
 
 Lean still independently verifies the certificate — the JSON file is untrusted.
 
-### Troubleshooting exactification failures
+### Troubleshooting Failures
 
-The SDP solver finds a numerical solution, which then needs to be converted to exact rationals. This "exactification" step can fail for several reasons. When it does, the solver returns diagnostics and suggestions.
+The backend can fail either because the relaxation is too small (the SDP is infeasible at the chosen parameters) or because a numerical SDP solution does not exactify cleanly. In both cases, it returns diagnostics and suggestions.
 
 **Increase the relaxation order.** If the solver returns infeasible, the truncation may be too small. Try increasing the order:
 
