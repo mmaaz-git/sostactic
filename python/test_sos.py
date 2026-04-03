@@ -283,6 +283,8 @@ def test_putinar():
 
     res = putinar(sp.Poly(x * y, x, y), gs, order=3)
     assert not res["success"]
+    assert res["status"] == "infeasible"
+    assert res["suggestion"] == "infeasible at this order; try a higher order or switch to schmudgen"
 
     # Scheiderer's Example 2.3.6: K = {x >= 1/2, y >= 1/2, xy <= 1} is compact,
     # but M = QM(2x-1, 2y-1, 1-xy) is NOT Archimedean. So c - x^2 - y^2 is
@@ -331,6 +333,14 @@ def test_schmudgen():
     assert res["success"]
     assert res["exact_identity"] == sp.Poly(x * y, x, y)
     assert res["exact_residual"] == sp.Poly(0, x, y)
+
+    # low order infeasibility should suggest increasing order
+    gs = [sp.Poly(1 - x**2 - y**2, x, y), sp.Poly(x**2 + y**2 - 2, x, y)]
+
+    res = schmudgen_empty(gs, order=0)
+    assert not res["success"]
+    assert res["status"] == "infeasible"
+    assert res["suggestion"] == "infeasible at this order; try a higher order"
 
 def test_basis_overrides_diagnostics():
     gs = [sp.Poly(x, x), sp.Poly(1 - x, x)]
@@ -441,3 +451,27 @@ def test_cli():
     )
     payload = json.loads(proc.stdout)
     assert payload["success"]
+
+    # putinar infeasible should suggest increasing order
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "putinar",
+            "--poly",
+            "x*y",
+            "--constraints",
+            "x, y, 1 - x - y",
+            "--vars",
+            "x y",
+            "--order",
+            "3",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(proc.stdout)
+    assert not payload["success"]
+    assert payload["status"] == "infeasible"
+    assert payload["suggestion"] == "infeasible at this order; try a higher order or switch to schmudgen"

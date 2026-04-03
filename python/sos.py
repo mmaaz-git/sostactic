@@ -1183,6 +1183,22 @@ def _basis_override_suggestion(result: dict):
         "text": f'try basis_overrides := "{_format_basis_overrides(heuristic)}"',
     }
 
+def _pstv_diagnostics(result: dict):
+    """
+    Diagnostics for failed Putinar/Schmudgen runs.
+    """
+    diag = {
+        "status": result.get("status"),
+        "kind": result.get("kind"),
+    }
+    if result.get("status") == "infeasible":
+        kind = result.get("kind")
+        if kind == "putinar":
+            diag["suggestion"] = "infeasible at this order; try a higher order or switch to schmudgen"
+        else:
+            diag["suggestion"] = "infeasible at this order; try a higher order"
+    return diag
+
 def _normalize_positivstellensatz_input(constraints, target):
     """
     Normalize the target and constraints for Putinar and Schmudgen.
@@ -1243,6 +1259,9 @@ def putinar(
     result = exactify_certificate_solution(numeric_certificate_solution(compiled))
     result["order"] = order
     if not result["success"]:
+        result["diagnostics"] = _pstv_diagnostics(result)
+        if result["diagnostics"].get("suggestion") is not None:
+            result["suggestion"] = result["diagnostics"]["suggestion"]
         result["block_diagnostics"] = _block_diagnostics(result)
         basis_override_suggestion = _basis_override_suggestion(result)
         if basis_override_suggestion is not None:
@@ -1333,6 +1352,9 @@ def schmudgen(
     result = exactify_certificate_solution(numeric_certificate_solution(compiled))
     result["order"] = order
     if not result["success"]:
+        result["diagnostics"] = _pstv_diagnostics(result)
+        if result["diagnostics"].get("suggestion") is not None:
+            result["suggestion"] = result["diagnostics"]["suggestion"]
         result["block_diagnostics"] = _block_diagnostics(result)
         basis_override_suggestion = _basis_override_suggestion(result)
         if basis_override_suggestion is not None:
