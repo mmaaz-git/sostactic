@@ -93,8 +93,19 @@ example (x1 x2 : ℝ) :
       + 10 * x1^2 * x2^2 + 4 * x1^3 * x2^2 + 3 * x1^4 * x2^2 + 4 * x1 * x2 - 8 * x1^2 * x2 := by
     sos_decomp (degree := 2)
 
+-- Rump's model problem with sos_decomp
+example (p0 p1 q0 q1 : ℝ) :
+    (1 / 2 : ℝ) * (p0^2 + p1^2) * (q0^2 + q1^2) ≤
+      (p0 * q0)^2 + (p0 * q1 + p1 * q0)^2 + (p1 * q1)^2 := by
+  sos_decomp
+
 -- AM-GM: sos_decomp handles a ≤ b goals, not just 0 ≤ f
 example (x y : ℝ) : 2 * x * y ≤ x^2 + y^2 := by
+  sos_decomp
+
+-- IMO 1971 Problem 1, case n = 3
+example (a b c : ℝ) :
+    0 ≤ (a - b) * (a - c) + (b - a) * (b - c) + (c - a) * (c - b) := by
   sos_decomp
 
 -- easy: x*(1-x) >= 0 on [0, 1]
